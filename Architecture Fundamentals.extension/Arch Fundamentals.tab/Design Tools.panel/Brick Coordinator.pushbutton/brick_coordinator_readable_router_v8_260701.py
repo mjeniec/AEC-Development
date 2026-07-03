@@ -574,12 +574,7 @@ if flipped_count > 0:
 
             start_is_open = False
 
-        # NOTE start_is_external line is essentially:
-        # if is_ccw:
-        #       start_is_external = cp_start_z > 0
-        # else:
-        #       start_is_external = cp_start_z < 0
-
+      
         # If this is the last edge in an open run, there is no following wall segment forming a corner,
         # so the end point is an open end.
         if i == num_edges - 1 and not is_closed_loop_layout:
@@ -632,62 +627,77 @@ if flipped_count > 0:
         if condition == "Co+": return (half_brick_units * 112.5 + 10)
         if condition == "Co": return (half_brick_units * 112.5)
 
-    # Create a safe copy of the EDGES matrix without attempting to deepcopy Revit API Wall elements
+    # Create a safe copy of the EDGES matrix without attempting to deepcopy Revit API Wall elements (doesn't work!)
+    # Create a second copy of the edge data.
+    #
+    # We do NOT use deepcopy() because the Revit Wall objects cannot safely be deep copied.
+    # We only need a new copy of the data that will be modified
+    # (points, lengths, conditions), while keeping references
+    # to the original Revit Wall objects.
+    #
+    # Learn more about Python references later.
+    
+    
     EDGES_copy = []
     for edge in EDGES:
         EDGES_copy.append({
             "Wall Object": edge["Wall Object"],
-            "Points List": list(edge["Points List"]),
+            "Points List": list(edge["Points List"]), # (x, y, z), (x, y, z)
             "Length": edge["Length"],
             "Condition": edge["Condition"]
         })
 
     # Resize leading segment (Segment 0)
     EDGES_copy[0]["Length"] = resize(EDGES[0]["Length"], EDGES[0]["Condition"])
-    start_pt = EDGES_copy[0]["Points List"][0] 
-    end_pt = EDGES[0]["Points List"][1] 
-    dx = end_pt[0] - start_pt[0] 
-    dy = end_pt[1] - start_pt[1] 
+    start_pt = EDGES_copy[0]["Points List"][0] # (x, y, z)
+    end_pt = EDGES[0]["Points List"][1] # (x, y, z)
+    dx = end_pt[0] - start_pt[0] # x end - x start
+    dy = end_pt[1] - start_pt[1] # y end - y start
+    # dx and dy describe the original edge's direction vector.
+    # Their magnitude gives the distance travelled along each axis.
+    # Their sign (+/-) gives the direction of travel.
 
-    if abs(dx) > abs(dy):
-        direction = 1.0 if dx > 0 else -1.0
-        new_end_x = start_pt[0] + (EDGES_copy[0]["Length"] * direction)
-        EDGES_copy[0]["Points List"][1] = (new_end_x, start_pt[1], start_pt[2])
-    else:
-        direction = 1.0 if dy > 0 else -1.0
-        new_end_y = start_pt[1] + (EDGES_copy[0]["Length"] * direction)
-        EDGES_copy[0]["Points List"][1] = (start_pt[0], new_end_y, start_pt[2])
+    if abs(dx) > abs(dy): # Edge is horizontal (X direction)
+        direction = 1.0 if dx > 0 else -1.0 # check if direction is positive or negative and store 
+        new_end_x = start_pt[0] + (EDGES_copy[0]["Length"] * direction) # calculate new end point x coordinate using resized length
+        EDGES_copy[0]["Points List"][1] = (new_end_x, start_pt[1], start_pt[2]) # update only the x coordinate of the end point (rebuild using start point coordinates as safer!)
+    
+    else: # edge is vertical (Y direction)
+        direction = 1.0 if dy > 0 else -1.0 # check if direction is positive or negative and store 
+        new_end_y = start_pt[1] + (EDGES_copy[0]["Length"] * direction) # calculate new end point y coordinate using resized length
+        EDGES_copy[0]["Points List"][1] = (start_pt[0], new_end_y, start_pt[2]) # update only the y coordinate of the end point (rebuild using start point coordinates as safer!)
 
-    prev_end_pt = EDGES_copy[0]["Points List"][1]
+    prev_end_pt = EDGES_copy[0]["Points List"][1] # (x, y, z)
 
-    # Sequential array projection loop
-    for i in range(1, len(EDGES_copy)):
-        EDGES_copy[i]["Points List"][0] = prev_end_pt
-        EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"])
+    
+    for i in range(1, len(EDGES_copy)): # loop through remaining edges 
+        EDGES_copy[i]["Points List"][0] = prev_end_pt # update the current edge's start point with previous edge's end point
+        EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"]) # use the original edge's length and condition to calculate the resized length, then store it in EDGES_copy.
 
-        # CRITICAL FIX: Read the delta vectors directly from the freshly chain-linked coordinates 
+        # TODO REMOVE NOTE - NO LONGER RELEVANT?- CRITICAL FIX: Read the delta vectors directly from the freshly chain-linked coordinates 
         # instead of the original raw layout array to protect against flipped normal flows.
-        current_start = EDGES_copy[i]["Points List"][0]
-        orig_end = EDGES[i]["Points List"][1]
-        orig_start = EDGES[i]["Points List"][0]
+        current_start = EDGES_copy[i]["Points List"][0] # (x, y, z) point has been updated to match previous end point
+        orig_end = EDGES[i]["Points List"][1] # (x, y, z) take from EDGES (not edges copy) as we want original direction vector (we moved the current start point to match previous end point)
+        orig_start = EDGES[i]["Points List"][0] # (x, y, z) take from EDGES (not edges copy) as we want original direction vector (we moved the current start point to match previous end point)
 
-        dx = orig_end[0] - orig_start[0]
-        dy = orig_end[1] - orig_start[1]
+        dx = orig_end[0] - orig_start[0] # x end - x start
+        dy = orig_end[1] - orig_start[1] # y end - y start
 
-        if abs(dx) > abs(dy):
-            direction = 1.0 if dx > 0 else -1.0
-            new_end_x = current_start[0] + (EDGES_copy[i]["Length"] * direction)
-            EDGES_copy[i]["Points List"][1] = (new_end_x, current_start[1], current_start[2])
-        else:
-            direction = 1.0 if dy > 0 else -1.0
-            new_end_y = current_start[1] + (EDGES_copy[i]["Length"] * direction)
-            EDGES_copy[i]["Points List"][1] = (current_start[0], new_end_y, current_start[2])
+        if abs(dx) > abs(dy): # Edge is horizontal (X direction)
+            direction = 1.0 if dx > 0 else -1.0 # check if direction is positive or negative and store 
+            new_end_x = current_start[0] + (EDGES_copy[i]["Length"] * direction) # calculate new end point x coordinate using resized length
+            EDGES_copy[i]["Points List"][1] = (new_end_x, current_start[1], current_start[2]) # update only the x coordinate of the end point (rebuild using start point coordinates as safer!)
+        
+        else: # Edge is horizontal (Y direction)
+            direction = 1.0 if dy > 0 else -1.0 # check if direction is positive or negative and store 
+            new_end_y = current_start[1] + (EDGES_copy[i]["Length"] * direction) # calculate new end point y coordinate using resized length
+            EDGES_copy[i]["Points List"][1] = (current_start[0], new_end_y, current_start[2]) # update only the y coordinate of the end point (rebuild using start point coordinates as safer!)
 
-        prev_end_pt = EDGES_copy[i]["Points List"][1]
+        prev_end_pt = EDGES_copy[i]["Points List"][1] # update prev_end_point with current end point. 
 
 
     # ==============================================================================
-    # PHASE 6: FINAL PRINT REPORT
+    # FINAL PRINT REPORT
     # ==============================================================================
     print("\n--- BRICK COORDINATOR PROCESSED OUTPUT ---")
     for idx in range(len(EDGES)):
@@ -696,9 +706,26 @@ if flipped_count > 0:
         print("  -> Corner Condition: {}".format(EDGES[idx]["Condition"]))
         print("  -> Target Brick Dim: {:.1f}mm".format(EDGES_copy[idx]["Length"]))
 
+    # :.1f is a format specifier:
+    # :    = formatting instructions follow
+    # .1   = display 1 decimal place
+    # f    = format as a floating-point number
+
     # ==============================================================================
-    # PHASE 7: AUTOMATIC PHYSICAL MODEL REPOSITIONING (FLIP-AWARE ENGINE)
+    # H: AUTOMATIC PHYSICAL MODEL REPOSITIONING (FLIP-AWARE ENGINE)
     # ==============================================================================
+
+    # At this point:
+    #
+    # EDGES_copy contains the processed edge data for each wall:
+    # - a reference to the original Revit Wall element,
+    # - recalculated brick-coordinated length,
+    # - updated start and end coordinates,
+    # - and the corner condition.
+    #
+    # This information will now be used to physically reposition the walls in Revit.
+
+
     # Open a database transaction to push changes into the active Revit document
     t_move = Transaction(doc, "Reposition and Co-ordinate Walls")
     t_move.Start()
@@ -706,40 +733,79 @@ if flipped_count > 0:
     try:
         # STEP 1: Temporarily disallow joins on all selected walls to prevent Revit panics
         for edge_data in EDGES_copy:
-            wall = edge_data["Wall Object"]
-            if wall is not None:
+            wall = edge_data["Wall Object"] # create new reference (not a new wall object!) to wall object from the reference in edge_data
+            if wall is not None: 
                 WallUtils.DisallowWallJoinAtEnd(wall, 0)
                 WallUtils.DisallowWallJoinAtEnd(wall, 1)
+                # Temporarily set both wall ends to "Do Not Join" so Revit
+                # doesn't automatically modify wall geometry while we reposition it
+
 
         # STEP 2: Shift, resize, and position every wall using dynamic alignment
         for edge_data in EDGES_copy:
             wall = edge_data["Wall Object"]
-            if wall is None:
+            if wall is None: # probably not really needed
                 continue
 
-            wall_loc = wall.Location
+
+            # Use the Wall reference to retrieve the wall's Location property.
+            # For walls, this is normally a LocationCurve object.
+            wall_loc = wall.Location           
+            # Check that the Location object is actually a LocationCurve
+            # before using LocationCurve-specific properties and methods.
             if isinstance(wall_loc, LocationCurve):
                 # 1. Pull the cleanly calculated target track footprint coordinates from Phase 5
                 start_mm = edge_data["Points List"][0]
                 end_mm = edge_data["Points List"][1]
 
-                # 2. Convert target track footprint points into native Revit Imperial Feet
+                # 2. Convert target track footprint points into feet
+                # Divide each coordinate by 304.8 to convert mm → feet.
+                # Pass the converted X, Y and Z values into the XYZ class to create Revit XYZ point objects.
                 pt_start_track = XYZ(start_mm[0] / 304.8, start_mm[1] / 304.8, start_mm[2] / 304.8)
                 pt_end_track = XYZ(end_mm[0] / 304.8, end_mm[1] / 304.8, end_mm[2] / 304.8)
 
                 # 3. Calculate a clean, 2D perpendicular vector from the target line path
-                track_dir = (pt_end_track - pt_start_track).Normalize()
-                perpend_vector = XYZ(-track_dir.Y, track_dir.X, 0.0)
+                # Create a vector pointing from the start point to the end point.
+                # A vector describes a direction and a distance, not a position.
+                #
+                # Normalize() keeps the direction the same but changes the vector's
+                # length to exactly 1 (a unit vector). This removes the original wall
+                # length so we can later multiply the vector by any distance we want
+                # (e.g. half the wall thickness).
+                track_dir = (pt_end_track - pt_start_track).Normalize() 
+                
+                # Take the wall/edge direction vector and rotate it 90 degrees in plan to create a perpendicular direction vector.
+                # This points across the wall, not along it, so it can be used to offset from the external face track to the wall centreline.
+                perpend_vector = XYZ(-track_dir.Y, track_dir.X, 0.0) # alternatively could be: XYZ(track_dir.Y, -track_dir.X, 0.0)
 
                 # 4. Calculate exactly half the wall thickness to shift from the face to the centerline
                 half_thickness_feet = wall.WallType.Width / 2.0
 
                 # 5. DYNAMIC TARGET CHECK: Test which direction points toward the physical wall core
-                test_pt_positive = pt_start_track + (perpend_vector * half_thickness_feet)
-                test_pt_negative = pt_start_track - (perpend_vector * half_thickness_feet)
 
-                # Measure distances from both test options to the wall's current original centerline axis
-                dist_pos = wall_loc.Curve.Distance(test_pt_positive)
+                # The recalculated brick track represents the EXTERNAL FACE of the wall.
+                # The Revit LocationCurve lies at the WALL CENTRELINE.
+                # Therefore we must move sideways by half the wall thickness to calculate
+                # the new centreline position that the LocationCurve should be moved to.
+                #
+                # The perpendicular vector tells us the sideways direction, but at this stage we don't know which side points towards the wall core.
+                #
+                # Because perpend_vector is a NORMALIZED vector (length = 1), multiplyingit by half_thickness_feet produces 
+                # a perpendicular offset vector whose length is exactly half the wall thickness.
+                #
+                # We therefore create two possible centreline positions:
+                #   +perpend_vector * half_thickness_feet
+                #   -perpend_vector * half_thickness_feet
+                #
+                # One of these points lies inside the wall (correct centreline direction), while the other lies outside the wall. 
+                # The next step measures which test point is closest to the wall's existing LocationCurve, allowing the correct offset direction to be chosen automatically.
+                
+                test_pt_positive = pt_start_track + (perpend_vector * half_thickness_feet) # stores a point coordinate positioned half the wall thickness away from the recalculated external face point.
+                test_pt_negative = pt_start_track - (perpend_vector * half_thickness_feet) # stores a point coordinate positioned half the wall thickness away from the recalculated external face point (on opposite side).
+
+                # Measure distances from both test options to the wall's current original centerline axis.
+                # Distance() method automatically gives shortest distances between two objects.
+                dist_pos = wall_loc.Curve.Distance(test_pt_positive) 
                 dist_neg = wall_loc.Curve.Distance(test_pt_negative)
 
                 # Choose the vector direction that shifts inward towards the wall core.
@@ -747,6 +813,16 @@ if flipped_count > 0:
                     correct_shift_vector = perpend_vector * half_thickness_feet
                 else:
                     correct_shift_vector = (-perpend_vector) * half_thickness_feet
+
+                # NOTE : VECTOR MATHMATICS:
+                # vector      = same length, original direction
+                # -vector     = same length, opposite direction
+
+                # vector * d  = length = d, original direction
+                # -vector * d = length = d, opposite direction
+
+                # We now have an offset vector (correct_shift_vector), with length equal to half the wall thickness, pointing from the 
+                # recalculated external face track toward the side where the wall centreline should be positioned.
 
                 # 6. Apply the verified vector to find the perfect structural centerline
                 pt_start_center = pt_start_track + correct_shift_vector
@@ -760,8 +836,36 @@ if flipped_count > 0:
                 if loc_param and not loc_param.IsReadOnly:
                     loc_param.Set(0)
 
+                # We call the get_Parameter() instance method on our Wall object. 
+                # We pass it the BuiltInParameter.WALL_KEY_REF_PARAM enum value, which identifies the built-in parameter that stores the wall's Location Line setting. 
+                # BuiltInParameter is the enum type. WALL_KEY_REF_PARAM is one value from that enum.
+                # The method returns a Parameter object representing that parameter, which we store in loc_param.
+
+                # TODO - REVIEW ERROR HANDLING.
+                #
+                # This currently skips the parameter update if the parameter cannot be
+                # retrieved or is read-only.
+                #
+                # Since this tool only operates on Wall objects, investigate whether it
+                # would be better to fail immediately with a clear error message rather
+                # than silently continuing with a potentially incorrect wall state.
+
+
+
                 # 9. CRITICAL FIX: If the wall was manually flipped by the user, 
                 # un-flip it before setting the curve to lock the external brick to the outside face.
+                # TODO - REVIEW WHETHER THIS IS STILL REQUIRED.
+                #
+                # This currently un-flips any wall that was manually flipped before the
+                # new LocationCurve is assigned.
+                #
+                # Open wall runs currently produce the correct result, but flipped closed-loop
+                # layouts end up with the wrong wall orientation.
+                #
+                # After implementing user confirmation of the exterior side for closed loops,
+                # test whether this wall.Flip() call is still necessary or whether it should
+                # be removed or replaced with logic that preserves the user's original flip state.
+
                 if wall.Flipped:
                     wall.Flip()
 
