@@ -1191,8 +1191,17 @@ else:
 
     # Extract the sorted endpoints strictly for calculation downstream
     ordered = [(item["Start"], item["End"]) for item in ordered_data]
-
-
+    
+    # PRINT DIAGNOSTIC - CAN BE DELETED LATER
+    print("\n===== ORDERED EDGES =====")
+    for i, (s, e) in enumerate(ordered):
+        print(
+            "Edge {}: ({:.1f}, {:.1f}) -> ({:.1f}, {:.1f})".format(
+                i,
+                s.X * 304.8, s.Y * 304.8,
+                e.X * 304.8, e.Y * 304.8
+            )
+        )
     # ==============================================================================
     # PHASE 3 & 4: AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITIONS
     # ==============================================================================
