@@ -1,4 +1,3 @@
-# TEMP PRINT LINE TEST
 # -*- coding: utf-8 -*-
 # Brick Coordinator readable router v8
 # Generated from the working v7 router, expanded so the two engines are readable/editable.
@@ -14,7 +13,7 @@
 # view type (e.g. a standard 3D view).
 #
 # Before running the main tool, check that the active view supports Detail
-# Curves. If not, inform the user and exit.
+# Curves. If not, inform the user and exit gracefully.
 #
 # Example behaviour:
 #
@@ -96,7 +95,7 @@ if flipped_count > 0:
     # 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
     geo_options = Options() # Creates a Revit geometry settings object.
     geo_options.ComputeReferences = False
-    geo_options.DetailLevel = ViewDetailLevel.Fine # Give me most detailed (Fine) version of geometry
+    geo_options.DetailLevel = ViewDetailLevel.Fine # Give me most detailed (FIne) version of geometry
     master_solid = None # create empty variable to eventually store fused solid
 
     for wall in walls:
@@ -167,7 +166,7 @@ if flipped_count > 0:
     # We have converted the selected CurveLoop into a Python list of
     # individual Curve objects (loop_curves), ready to analyse.
 
-    # If all_loops contains more than one loop or we don't find exactly two end caps, it's a closed loop layout
+    # If all_loops contains more than one loop or we don't find exactly two end caps, it's a closed structural loop layout
     if len(all_loops) > 1 or len(cap_indices) != 2:
         is_closed_loop_layout = True
         print("Morphology Identified: Closed Loop. Isolating exterior perimeter by area scaling.")
@@ -327,7 +326,7 @@ if flipped_count > 0:
 
         t_clean = Transaction(doc, "Clean Temp Highlights")
         t_clean.Start()
-        for l_id in created_line_ids: # created at beginning of Section D
+        for l_id in created_line_ids: # created at beginning of D
             try:
                 doc.Delete(l_id)
             except:
@@ -363,6 +362,8 @@ if flipped_count > 0:
 # lines_side_a and lines_side_b contain the two long sides of the wall run.
 # user_selection_is_side_a identifies which side the user confirmed as the
 # exterior face.
+
+
 
 # For each boundary curve, identify the closest original Wall element and
 # package it together with the curve's start and end XYZ points.
@@ -403,8 +404,7 @@ if flipped_count > 0:
     
     # Define standard loop sorting function that works regardless of track alignment variations
     def sort_packaged_track(raw_edges_list):
-        if not raw_edges_list: # checks for empty list - e.g if passed raw_side_b in closed loop scenario, 
-        # returns empty list & does not try to sort
+        if not raw_edges_list: # checks for empty list - e.g if passed raw_side_b in closed loop scenario, returns empty list & does not try to sort
             return []
         unused = raw_edges_list[:]
         current = unused.pop(0)
@@ -481,7 +481,7 @@ if flipped_count > 0:
 # Consider reusing the existing is_closed_loop_layout value.
 
 
-# def cross_product: Calculates the Z value of the cross product for 3 points. 
+# def cross_product: Calculates thes Z value of the cross product for 3 points. 
 # Returns a positive or negative value describing the turn direction
 # between three consecutive points (p1 -> p2 -> p3).
 #
@@ -552,7 +552,7 @@ if flipped_count > 0:
         # Calculates the turn through the corner where the previous edge meets the start of the current edge.
         else:
             edge_prev = ordered[(i - 1) % num_edges] 
-            cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end) # this could be (edge_prev[0], pt_start, pt_end) - doesn't matter
+            cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end) # this could be (edge_prev[0], pt_start, pt_end) - dosn't matter
             
             if is_ccw:
 
@@ -585,7 +585,7 @@ if flipped_count > 0:
         else:
             edge_next = ordered[(i + 1) % num_edges]
             cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
-            end_is_external = cp_end_z > 0 if is_ccw else cp_end_z < 0 # appreviated syntax - see above for longer version
+            end_is_external = cp_end_z > 0 if is_ccw else cp_end_z < 0
             end_is_open = False
 
         
@@ -613,7 +613,7 @@ if flipped_count > 0:
 
 # At this point:
 #
-# EDGES contains list of dictionaries containing: wall object, points list, length and condition for each edge
+# EDGES Dictionary contains: wall object, points list, length and condition for each wall segment
  
     
     def resize(length, condition):
@@ -669,7 +669,7 @@ if flipped_count > 0:
 
     prev_end_pt = EDGES_copy[0]["Points List"][1] # (x, y, z)
 
-    # Resize remaining segments
+    
     for i in range(1, len(EDGES_copy)): # loop through remaining edges 
         EDGES_copy[i]["Points List"][0] = prev_end_pt # update the current edge's start point with previous edge's end point
         EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"]) # use the original edge's length and condition to calculate the resized length, then store it in EDGES_copy.
@@ -754,7 +754,7 @@ if flipped_count > 0:
             # Check that the Location object is actually a LocationCurve
             # before using LocationCurve-specific properties and methods.
             if isinstance(wall_loc, LocationCurve):
-                # 1. Pull the cleanly calculated target track footprint coordinates from G
+                # 1. Pull the cleanly calculated target track footprint coordinates from Phase 5
                 start_mm = edge_data["Points List"][0]
                 end_mm = edge_data["Points List"][1]
 
@@ -790,7 +790,7 @@ if flipped_count > 0:
                 #
                 # The perpendicular vector tells us the sideways direction, but at this stage we don't know which side points towards the wall core.
                 #
-                # Because perpend_vector is a NORMALIZED vector (length = 1), multiplying it by half_thickness_feet produces 
+                # Because perpend_vector is a NORMALIZED vector (length = 1), multiplyingit by half_thickness_feet produces 
                 # a perpendicular offset vector whose length is exactly half the wall thickness.
                 #
                 # We therefore create two possible centreline positions:
