@@ -575,10 +575,10 @@ if flipped_count > 0:
     else:
         is_ccw = user_direction_override # NOTE check this as default should cause mistakes but doesn't
 
-    # DEBUG POINT 1
-    print("\n===== DIRECTION =====")
+    print("\n===== PART F: CORNER CLASSIFICATION =====")
     print("Closed Loop :", is_closed_loop_layout)
-    print("is_ccw      :", is_ccw)
+    print("Rule        : OUTSIDE is LEFT of selected exterior track")
+    print("Therefore  : RIGHT turn = external corner")
 
 
 # Calculate length of curve
@@ -605,52 +605,63 @@ if flipped_count > 0:
 
 # below block calculates end condition of each curve using cross product z and direction
 
+        # START CONDITION
         # If this is the first edge in an open run, there is no previous wall segment forming a corner,
         # so the start point is an open end.
         if i == 0 and not is_closed_loop_layout:
             start_is_external = False 
             start_is_open = True
+            print("Start condition : OPEN END")
 
         # Calculates the turn through the corner where the previous edge meets the start of the current edge.
         else:
-            edge_prev = ordered[(i - 1) % num_edges] 
-            cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end) # this could be (edge_prev[0], pt_start, pt_end) - dosn't matter
-            
-            if is_ccw:
+            edge_prev = ordered[(i - 1) % num_edges]
 
-                if cp_start_z > 0:
-                    start_is_external = True
-                else:
-                    start_is_external = False
+            # Turn from previous edge into current edge
+            cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
 
-            else: # (is cw)
-
-                if cp_start_z < 0:
-                    start_is_external = True
-                else:
-                    start_is_external = False
-            
-            # DEBUG POINT 3
-            print("cp_start_z       :", cp_start_z)
-            print("start_external   :", start_is_external)
+            # New rule:
+            # cp_start_z > 0 means the path turns LEFT.
+            # Since outside is on the LEFT, a LEFT turn is external.
+            if cp_start_z < 0:
+                start_is_external = True
+            else:
+                start_is_external = False
 
             start_is_open = False
 
-      
+            print("cp_start_z       :", cp_start_z)
+            print("start_external   :", start_is_external)
+
+        # END CONDITION
         # If this is the last edge in an open run, there is no following wall segment forming a corner,
         # so the end point is an open end.
         if i == num_edges - 1 and not is_closed_loop_layout:
             end_is_external = False
             end_is_open = True
+            print("End condition   : OPEN END")
 
        # Calculates the turn through the corner where the current edge meets the next edge.
         else:
             edge_next = ordered[(i + 1) % num_edges]
+
+            # Turn from current edge into next edge
             cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
-            end_is_external = cp_end_z > 0 if is_ccw else cp_end_z < 0
+
+            # New rule:
+            # cp_end_z > 0 means the path turns LEFT.
+            # Since outside is on the LEFT, a LEFT turn is external.
+            if cp_end_z < 0:
+                end_is_external = True
+            else:
+                end_is_external = False
+
             end_is_open = False
 
-        
+            print("cp_end_z         :", cp_end_z)
+            print("end_external     :", end_is_external)
+
+        # BRICK CONDITION
         if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
             if num_edges == 1: brick_condition = "Co-" 
             elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
@@ -659,6 +670,8 @@ if flipped_count > 0:
             if start_is_external and end_is_external: brick_condition = "Co-"   
             elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
             else: brick_condition = "Co+"   
+
+        print("Brick condition  :", brick_condition)    
 
         wall_info = {
             "Wall Object": ordered_data[i]["Wall"], # Injects physical wall object reference safely into data map
