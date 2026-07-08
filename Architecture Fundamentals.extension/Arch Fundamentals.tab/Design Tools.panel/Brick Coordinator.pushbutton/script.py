@@ -141,42 +141,33 @@ if flipped_count > 0:
 
     # At this point: we have a list of all the curveloops extracted from bottom face of fused solid.
 
-    # If all_loops contains only one CurveLoop, store that loop in selected_loop.
-    # Otherwise, take all the CurveLoop objects in all_loops, use GetExactLength() to calculate the 
-    # perimeter of each loop, and store the loop with the greatest perimeter in selected_loop. 
+    # If all_loops contains only one CurveLoop (wall is open loop), break into curves and store in selected_loop, 
+    # locate caps and separate into two sides before storing in lines_side_a and lines_side_b
+
+    # Otherwise, (wall is closed loop) take each loop, break into curves and store in lines_side_a and lines_side_b
     # NOTE: Future introduction of user check for closed loop walls - take multiple curve loops forward as selected loop. 
-   
-    selected_loop = all_loops[0] if len(all_loops) == 1 else max(all_loops, key=lambda l: l.GetExactLength())
-
-    # Convert the CurveLoop container into an iterable list of individual Curve objects
-    loop_curves = [c for c in selected_loop] # list of curves
-    num_curves = len(loop_curves) # number of curves
-
-    # Find the indices of the end-caps matching the wall thickness
-    cap_indices = []
-    for idx, curve in enumerate(loop_curves):
-        if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
-            cap_indices.append(idx)
-
+    
     # Create side lists before determining if wall layout is open or closed
     lines_side_a = []
     lines_side_b = []
 
-    # PART 2 - At this point: 
-    # We have converted the selected CurveLoop into a Python list of
-    # individual Curve objects (loop_curves), ready to analyse.
-
-    # If all_loops contains more than one loop or we don't find exactly two end caps, it's a closed structural loop layout
-    if len(all_loops) > 1 or len(cap_indices) != 2:
-        is_closed_loop_layout = True
-        print("Morphology Identified: Closed Loop. Isolating exterior perimeter by area scaling.")
-        outer_loop = max(all_loops, key=lambda l: l.GetExactLength()) # NOTE: MAY DELETE AS REPEATED FROM PART 1
-        lines_side_a = [curve for curve in outer_loop] # NOTE: REPLACE WITH lines_side_a = loop_curves SEE PART 1
-    # NOTE: if add user confirmation for closed loop, assign one curve from all_loops into lines_side_a and one into lines_side_b
-  
-    else:
+    if len(all_loops) == 1:   # i.e if open loop wall
         is_closed_loop_layout = False
         print("Morphology Identified: Open String. Splitting parallel tracks topologically...")
+
+        selected_loop = all_loops[0]
+        # Convert the CurveLoop container into an iterable list of individual Curve objects
+        loop_curves = [c for c in selected_loop] # list of curves
+        
+        # Find the indices of the end-caps matching the wall thickness
+        cap_indices = []
+        for idx, curve in enumerate(loop_curves):
+            if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
+                cap_indices.append(idx)
+
+        if len(cap_indices) != 2:
+            UI.TaskDialog.Show("Geometry Error", "Could not identify the two wall end caps.")
+            script.exit()
 
         cap_indices.sort() # sort indices into ascending order 
         idx1 = cap_indices[0]
@@ -185,54 +176,88 @@ if flipped_count > 0:
         # Extract the two long continuous tracks sitting between the end caps
         track_1 = loop_curves[idx1 + 1 : idx2] # gives all curves between first cap and second cap
         track_2 = loop_curves[idx2 + 1 :] + loop_curves[:idx1] # gives curves from second cap to end of the list and everything before cap 1
-        
+
         # Remove any remaining cap curves by filtering out curves
         # whose length is approximately equal to the wall thickness.
         lines_side_a = [c for c in track_1 if abs(c.Length - wall_thickness_feet) >= 0.083]
         lines_side_b = [c for c in track_2 if abs(c.Length - wall_thickness_feet) >= 0.083]
 
-        if not lines_side_a or not lines_side_b:
-            UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
+    else: # i.e if closed loop wall
+        is_closed_loop_layout = True
+        print("Morphology Identified: Closed Loop. Preparing both perimeter loops for user confirmation.")
+
+        if len(all_loops) != 2:
+            UI.TaskDialog.Show( 
+                "Geometry Error",
+                "Expected exactly two perimeter loops for a closed wall layout."
+            )
             script.exit()
+
+        lines_side_a = [c for c in all_loops[0]]
+        lines_side_b = [c for c in all_loops[1]]
+        
+    if not lines_side_a or not lines_side_b:
+        UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
+        script.exit()
+    
+    # DIAGNOSTIC
+    print("\n===== SHAPE DETECTION =====")
+    print("Closed Loop :", is_closed_loop_layout)
+    print("Number of loops found :", len(all_loops))
+    print("Side A segments :", len(lines_side_a))
+    print("Side B segments :", len(lines_side_b))
+
+    print("\n--- Side A ---")
+    for i, curve in enumerate(lines_side_a):
+        print("Segment {} : {:.1f} mm".format(i, curve.Length * 304.8))
+
+    print("\n--- Side B ---")
+    for i, curve in enumerate(lines_side_b):
+        print("Segment {} : {:.1f} mm".format(i, curve.Length * 304.8))
+
+    total_a = sum(c.Length for c in lines_side_a) * 304.8
+    total_b = sum(c.Length for c in lines_side_b) * 304.8
+
+    print("\n--- LOOP TOTALS ---")
+    print("Side A total length : {:.1f} mm".format(total_a))
+    print("Side B total length : {:.1f} mm".format(total_b))
 
 # ==============================================================================
 # D. USER CONFIRMATION
 # ==============================================================================
     # At this point:
 
-    # Closed loop layout: lines_side_a contains the curve segments of the selected perimeter loop
-    # (currently assumed to be the exterior loop). NOTE: Future user check to be added to deal with
-    # internal courtyard edge case. 
+    # Closed Loop Layout and Open Loop Layout:
 
-    # Open wall run:
     # lines_side_a contains one side of the wall run.
     # lines_side_b contains the opposite side of the wall run.
 
     # The script must now determine which side represents the exterior face.
 
-    # Visual highlighting using View Detail Lines (Only applies to Open Strings)
+    # Visual highlighting using temporary View Detail Lines.
+    # The highlighted Side A is shown to the user, who confirms
+    # whether it represents the exterior face.
     
 
-    if not is_closed_loop_layout: 
-        created_line_ids = []
-        thick_override = OverrideGraphicSettings()
-        thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
-        thick_override.SetProjectionLineWeight(4)
+    created_line_ids = []
+    thick_override = OverrideGraphicSettings()
+    thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
+    thick_override.SetProjectionLineWeight(4)
 
-        t_draw = Transaction(doc, "Draw Temp Track Highlight")
-        t_draw.Start()
+    t_draw = Transaction(doc, "Draw Temp Track Highlight")
+    t_draw.Start()
 
-        for curve in lines_side_a:
-            try:
-                p_start = curve.GetEndPoint(0)
-                p_end = curve.GetEndPoint(1)
-                view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
-                d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve) # returns a revit element (i.e a new Detail Curve)
-                created_line_ids.append(d_line.Id)
-                doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
-            except Exception:
-                pass
-        t_draw.Commit()
+    for curve in lines_side_a:
+        try:
+            p_start = curve.GetEndPoint(0)
+            p_end = curve.GetEndPoint(1)
+            view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
+            d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve) # returns a revit element (i.e a new Detail Curve)
+            created_line_ids.append(d_line.Id)
+            doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
+        except Exception:
+            pass
+    t_draw.Commit()
 
 # -------------------------------------------------------------------------
 # TODO - Investigate why new XYZ objects are created with Z = 0 before
@@ -263,106 +288,97 @@ if flipped_count > 0:
 # -------------------------------------------------------------------------
 
 
-        uidoc.Selection.SetElementIds(List[ElementId]())
-        uidoc.RefreshActiveView()
+    uidoc.Selection.SetElementIds(List[ElementId]())
+    uidoc.RefreshActiveView()
 
-        # Pure Programmatic WPF Windows Object Generation
-        panel = Window()
-        panel.Title = "Track Selector"
-        panel.Height = 150
-        panel.Width = 420
-        panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
-        panel.Topmost = True
-        panel.ResizeMode = panel.ResizeMode.NoResize
+    # Pure Programmatic WPF Windows Object Generation
+    panel = Window()
+    panel.Title = "Track Selector"
+    panel.Height = 150
+    panel.Width = 420
+    panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
+    panel.Topmost = True
+    panel.ResizeMode = panel.ResizeMode.NoResize
 
-        main_layout = StackPanel()
-        main_layout.Margin = Thickness(15)
+    main_layout = StackPanel()
+    main_layout.Margin = Thickness(15)
 
-        txt_lbl = TextBlock()
-        txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
-        txt_lbl.FontWeight = FontWeights.Bold
-        txt_lbl.FontSize = 13
-        txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
-        txt_lbl.Margin = Thickness(0, 0, 0, 15)
-        main_layout.Children.Add(txt_lbl)
+    txt_lbl = TextBlock()
+    txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
+    txt_lbl.FontWeight = FontWeights.Bold
+    txt_lbl.FontSize = 13
+    txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
+    txt_lbl.Margin = Thickness(0, 0, 0, 15)
+    main_layout.Children.Add(txt_lbl)
 
-        btn_grid = Grid()
-        col1 = ColumnDefinition()
-        col2 = ColumnDefinition()
-        btn_grid.ColumnDefinitions.Add(col1)
-        btn_grid.ColumnDefinitions.Add(col2)
+    btn_grid = Grid()
+    col1 = ColumnDefinition()
+    col2 = ColumnDefinition()
+    btn_grid.ColumnDefinitions.Add(col1)
+    btn_grid.ColumnDefinitions.Add(col2)
 
-        state = {"approved": True}
+    state = {"approved": True}
 
-        def click_yes(sender, e):
-            state["approved"] = True
-            panel.Close()
+    def click_yes(sender, e):
+        state["approved"] = True
+        panel.Close()
 
-        def click_no(sender, e):
-            state["approved"] = False
-            panel.Close()
+    def click_no(sender, e):
+        state["approved"] = False
+        panel.Close()
 
-        btn_yes = Button()
-        btn_yes.Content = "Yes, Use Highlighted Track"
-        btn_yes.Height = 30
-        btn_yes.Margin = Thickness(0, 0, 5, 0)
-        btn_yes.Click += click_yes
-        Grid.SetColumn(btn_yes, 0)
-        btn_grid.Children.Add(btn_yes)
+    btn_yes = Button()
+    btn_yes.Content = "Yes, Use Highlighted Track"
+    btn_yes.Height = 30
+    btn_yes.Margin = Thickness(0, 0, 5, 0)
+    btn_yes.Click += click_yes
+    Grid.SetColumn(btn_yes, 0)
+    btn_grid.Children.Add(btn_yes)
 
-        btn_no = Button()
-        btn_no.Content = "No, Use Opposite Track"
-        btn_no.Height = 30
-        btn_no.Margin = Thickness(5, 0, 0, 0)
-        btn_no.Click += click_no
-        Grid.SetColumn(btn_no, 1)
-        btn_grid.Children.Add(btn_no)
+    btn_no = Button()
+    btn_no.Content = "No, Use Opposite Track"
+    btn_no.Height = 30
+    btn_no.Margin = Thickness(5, 0, 0, 0)
+    btn_no.Click += click_no
+    Grid.SetColumn(btn_no, 1)
+    btn_grid.Children.Add(btn_no)
 
-        main_layout.Children.Add(btn_grid)
-        panel.Content = main_layout
-        panel.ShowDialog()
+    main_layout.Children.Add(btn_grid)
+    panel.Content = main_layout
+    panel.ShowDialog()
 
-        user_selection_is_side_a = state["approved"]
+    user_selection_is_side_a = state["approved"]
 
-        t_clean = Transaction(doc, "Clean Temp Highlights")
-        t_clean.Start()
-        for l_id in created_line_ids: # created at beginning of D
-            try:
-                doc.Delete(l_id)
-            except:
-                pass
-        t_clean.Commit()
-        uidoc.RefreshActiveView()
+    t_clean = Transaction(doc, "Clean Temp Highlights")
+    t_clean.Start()
+    for l_id in created_line_ids: # created at beginning of D
+        try:
+            doc.Delete(l_id)
+        except:
+            pass
+    t_clean.Commit()
+    uidoc.RefreshActiveView()
 
+
+    # PRINT DIAGNOSTIC
+    print("\n===== USER CONFIRMATION =====")
+    print("Closed Loop :", is_closed_loop_layout)
+    print("User selected Side A :", user_selection_is_side_a)
     
-    else: 
-        user_selection_is_side_a = True
-
-# TODO - Future improvement:take both lines forward (a and b) for both closed and open loop scenario. 
-# Ask user to confirm side. Take chosen side into sorting.
-
 # ==============================================================================
 # E. SORTING
 # =================================================================================
   
 # At this point:
 #
-# Closed loop layout:
-# lines_side_a contains the curve segments forming the outer perimeter of the
-# wall layout. In the current flipped-wall engine this is assumed to be the
-# exterior boundary, so flipped closed-loop layouts are not yet coordinated
-# correctly.
+# lines_side_a and lines_side_b contain the two possible wall face tracks.
+# This is true for both open wall runs and closed loop layouts.
 #
-# TODO - Future improvement:
-# Introduce the same user confirmation used for open wall runs, allowing the
-# user to confirm which perimeter is the true exterior boundary (e.g. courtyard
-# layouts) so both flipped and unflipped closed loops are handled correctly.
-
-# Open wall run:
-# lines_side_a and lines_side_b contain the two long sides of the wall run.
-# user_selection_is_side_a identifies which side the user confirmed as the
-# exterior face.
-
+# user_selection_is_side_a stores the user's confirmation from Part D:
+# True  = use Side A as the exterior face
+# False = use Side B as the exterior face
+#
+# Part E now packages and sorts only the user-selected side.
 
 
 # For each boundary curve, identify the closest original Wall element and
@@ -386,13 +402,10 @@ if flipped_count > 0:
             packaged.append({"Wall": matched_wall, "Start": p_start, "End": p_end})
         return packaged
 
-
-# TODO - Review whether both tracks need packaging/sorting.
-# The correct track is already known, so only the selected side may need processing.
-    raw_side_a = package_track(lines_side_a)
-    raw_side_b = package_track(lines_side_b) if not is_closed_loop_layout else []
-
-
+    if user_selection_is_side_a:
+        raw_side = package_track(lines_side_a)
+    else:
+        raw_side = package_track(lines_side_b)
 
 # NOTE: found is reset to False at the start of each while iteration.
 # The for loop then checks EVERY remaining curve looking for a connection.
@@ -446,18 +459,66 @@ if flipped_count > 0:
         return ordered_list
 
     # Sort both tracks cleanly
-    sorted_side_a = sort_packaged_track(raw_side_a)
-    sorted_side_b = sort_packaged_track(raw_side_b)
-
-    # Select the winner based on user choice
-    if user_selection_is_side_a or is_closed_loop_layout:
-        ordered_data = sorted_side_a
-    else:
-        ordered_data = sorted_side_b
-
+    sorted_side = sort_packaged_track(raw_side)
+    
+    ordered_data = sorted_side
+    
     # Extract the sorted endpoints required downstream for calculation matrices
     ordered = [(item["Start"], item["End"]) for item in ordered_data]
 
+    # PRINT DIAGNOSTIC
+    print("\n===== SORTED TRACK =====")
+
+    for i, edge in enumerate(ordered_data):
+        start = edge["Start"]
+        end = edge["End"]
+
+        length_mm = start.DistanceTo(end) * 304.8
+
+        print("\nEdge {}".format(i))
+        print("Length : {:.1f} mm".format(length_mm))
+        print("Start  : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
+        print("End    : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
+
+    print("\n===== OUTSIDE SIDE TEST =====")
+
+    print("User selected Side A :", user_selection_is_side_a)
+    print("Testing selected exterior track only")
+
+    half_thickness_feet = wall_thickness_feet / 2.0
+
+    for i, edge in enumerate(ordered_data):
+        wall = edge["Wall"]
+        start = edge["Start"]
+        end = edge["End"]
+
+        track_dir = (end - start).Normalize()
+        left_vec = XYZ(-track_dir.Y, track_dir.X, 0.0)
+        right_vec = -left_vec
+
+        mid = XYZ(
+            (start.X + end.X) / 2.0,
+            (start.Y + end.Y) / 2.0,
+            (start.Z + end.Z) / 2.0
+        )
+
+        test_left = mid + (left_vec * half_thickness_feet)
+        test_right = mid + (right_vec * half_thickness_feet)
+
+        dist_left = wall.Location.Curve.Distance(test_left)
+        dist_right = wall.Location.Curve.Distance(test_right)
+
+        print("\nEdge {}".format(i))
+        print("Wall flipped :", wall.Flipped)
+        print("Left test distance to wall centreline  : {:.4f}".format(dist_left))
+        print("Right test distance to wall centreline : {:.4f}".format(dist_right))
+
+        if dist_left < dist_right:
+            print("Wall core is on LEFT of selected track")
+            print("Therefore OUTSIDE is on RIGHT")
+        else:
+            print("Wall core is on RIGHT of selected track")
+            print("Therefore OUTSIDE is on LEFT")
 # ==============================================================================
 # F. AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITION ASSIGNMENT
 # =================================================================================
@@ -497,7 +558,8 @@ if flipped_count > 0:
         return (v1_x * v2_y) - (v1_y * v2_x)
 
     user_direction_override = False 
-
+    
+# NOTE potential removal below
 # Calculate whether diection is cw of ccw
     if is_closed_loop_layout:
         total_turn_sign = 0 
@@ -882,6 +944,7 @@ if flipped_count > 0:
         t_move.Commit()
         print("\n[SUCCESS]: Physical walls have been automatically adjusted and aligned to brick dimensions.")
         uidoc.RefreshActiveView()
+        
 
     except Exception as e:
         t_move.RollBack()
@@ -1202,6 +1265,46 @@ else:
                 e.X * 304.8, e.Y * 304.8
             )
         )
+
+    print("\n===== OUTSIDE SIDE TEST =====")
+
+    print("User selected Side A :", user_selection_is_side_a)
+    print("Testing selected exterior track only")
+
+    half_thickness_feet = wall_thickness_feet / 2.0
+    
+    for i, edge in enumerate(ordered_data):
+        wall = edge["Wall"]
+        start = edge["Start"]
+        end = edge["End"]
+
+        track_dir = (end - start).Normalize()
+        left_vec = XYZ(-track_dir.Y, track_dir.X, 0.0)
+        right_vec = -left_vec
+
+        mid = XYZ(
+            (start.X + end.X) / 2.0,
+            (start.Y + end.Y) / 2.0,
+            (start.Z + end.Z) / 2.0
+        )
+
+        test_left = mid + (left_vec * half_thickness_feet)
+        test_right = mid + (right_vec * half_thickness_feet)
+
+        dist_left = wall.Location.Curve.Distance(test_left)
+        dist_right = wall.Location.Curve.Distance(test_right)
+
+        print("\nEdge {}".format(i))
+        print("Wall flipped :", wall.Flipped)
+        print("Left test distance to wall centreline  : {:.4f}".format(dist_left))
+        print("Right test distance to wall centreline : {:.4f}".format(dist_right))
+
+        if dist_left < dist_right:
+            print("Wall core is on LEFT of selected track")
+            print("Therefore OUTSIDE is on RIGHT")
+        else:
+            print("Wall core is on RIGHT of selected track")
+            print("Therefore OUTSIDE is on LEFT")
     # ==============================================================================
     # PHASE 3 & 4: AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITIONS
     # ==============================================================================
