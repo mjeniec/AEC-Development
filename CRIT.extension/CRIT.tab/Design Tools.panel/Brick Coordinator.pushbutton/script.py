@@ -970,7 +970,7 @@ else:
         print("Flipped    :", wall.Flipped)
         print("Start      : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
         print("End        : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
-        
+
     # ==========================================================================
     # NON-FLIPPED-WALL ENGINE
     # ==========================================================================
@@ -1454,8 +1454,8 @@ else:
 
 
     # ==============================================================================
-    # PHASE 3 & 4: AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITIONS
-    # ==============================================================================
+    # F. AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITION ASSIGNMENT
+    # =================================================================================
 
     num_edges = len(ordered)
     EDGES = []
@@ -1463,6 +1463,11 @@ else:
     first_point = ordered[0][0]
     last_point = ordered[-1][1]
     is_closed_loop_layout = same(first_point, last_point) 
+    
+    # TODO - Review whether this closed-loop check is still required.
+    # The layout type was already determined in Section C and has not changed.
+    # Consider reusing the existing is_closed_loop_layout value.
+
 
     def cross_product_z(p1, p2, p3):
         v1_x = p2.X - p1.X
@@ -1470,9 +1475,10 @@ else:
         v2_x = p3.X - p2.X
         v2_y = p3.Y - p2.Y
         return (v1_x * v2_y) - (v1_y * v2_x)
-
+    
+    # NOTE potential removal below
     user_direction_override = False 
-
+    
     if is_closed_loop_layout:
         total_turn_sign = 0 
         for i in range(num_edges):
@@ -1493,23 +1499,31 @@ else:
         dx_mm = (pt_end.X - pt_start.X) * 304.8
         dy_mm = (pt_end.Y - pt_start.Y) * 304.8
         length_mm = math.sqrt(dx_mm**2 + dy_mm**2)
-
+        
+        # TODO - Consider storing curve length during package_track().
+        
+        # START CONDITION
         if i == 0 and not is_closed_loop_layout:
             start_is_external = False 
             start_is_open = True
-        else:
+        else: # CLOSED LOOP
             edge_prev = ordered[(i - 1) % num_edges] 
             cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
-            start_is_external = cp_start_z > 0 if is_ccw else cp_start_z < 0
+            # The selected exterior track has outside on its LEFT.
+            # Therefore a RIGHT turn indicates an external corner.
+            start_is_external = cp_start_z < 0 
             start_is_open = False
 
+        # END CONDITION
         if i == num_edges - 1 and not is_closed_loop_layout:
             end_is_external = False
             end_is_open = True
-        else:
+        else: # CLOSED LOOP
             edge_next = ordered[(i + 1) % num_edges]
             cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
-            end_is_external = cp_end_z > 0 if is_ccw else cp_end_z < 0
+            # The selected exterior track has outside on its LEFT.
+            # Therefore a RIGHT turn indicates an external corner.
+            end_is_external = cp_end_z < 0
             end_is_open = False
 
         if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:

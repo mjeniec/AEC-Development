@@ -2,51 +2,45 @@
 
 ---
 
-# Commit 003
+# Commit 004
 
 ---
 
 ## Git Commit #
 
-003
+004
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped engine through Part E
+Refactor non-flipped Part F to use local corner classification
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine to match the architecture of the flipped engine through Parts B–E.
+Refactored the non-flipped engine's Part F corner classification to match the flipped engine.
 
 Changes include:
 
-- Unified geometry extraction.
-- Common shape detection for open runs and closed loops.
-- User confirmation of the exterior track for both layout types.
-- Replacement of the original sorting engine with the new packaged track sorter.
-- Removal of the old mirrored-track generation logic from Part E. 
-- Added diagnostics comparing original Revit LocationCurve directions with the sorted exterior track.
-
-No changes have yet been made to the executable Part F corner-classification logic in the non-flipped engine.
+- Removed dependence on global clockwise/anti-clockwise loop direction when determining corner types.
+- Replaced the conditional is_ccw corner tests with direct local cross-product classification.
+- Both engines now classify corners using the same rule:
+- Outside lies on the LEFT of the selected exterior track.
+- A RIGHT turn (negative cross product) is an external corner.
+- A LEFT turn (positive cross product) is an internal corner.
+- The legacy is_ccw calculation has been retained temporarily but is no longer used by the corner-classification logic.
 
 ---
 
 ## Reason for Change
 
-The long-term goal is for the flipped and non-flipped engines to use the same software architecture before duplicated logic is consolidated.
+Following the Parts B–E refactor, both the flipped and non-flipped engines now produce the same geometric invariant before entering Part F.
 
-This commit establishes equivalent data structures and processing through Part E in both engines.
+This made it possible to replace the remaining orientation-dependent logic with the same local corner-classification algorithm already proven in the flipped engine.
 
-Both engines now pass the following data into Part F:
-
-ordered_data
-ordered
-
-This allows Part F to be refactored incrementally while retaining a clear, testable baseline.
+The aim is to eliminate dependence on whole-loop orientation and instead classify each corner purely from local geometry.
 
 ---
 
@@ -59,7 +53,7 @@ This allows Part F to be refactored incrementally while retaining a clear, testa
 
 Error / Notes:
 
-Sorted selected track runs opposite to the original Revit LocationCurve direction.
+Corner classification correct.
 
 Brick-condition assignment correct.
 
@@ -72,7 +66,7 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Sorted selected track runs opposite to the original Revit LocationCurve direction.
+Corner classification correct.
 
 Brick-condition assignment correct.
 
@@ -85,7 +79,7 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Sorted selected track runs opposite to the original Revit LocationCurve direction.
+Corner classification correct.
 
 Brick-condition assignment correct.
 
@@ -100,9 +94,7 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Each sorted wall segment preserves its original Revit LocationCurve direction.
-
-The sorted sequence may begin at a different wall, but this is only a rotation of the closed loop.
+Corner classification correct.
 
 Brick-condition assignment correct.
 
@@ -111,17 +103,17 @@ Physical wall repositioning successful.
 ---
 
 ### Closed Loop - Anti-clockwise
-[ ]
+[x]
 
 Error / Notes:
 
-Part F appears to allocate brick conditions and resize the selected exterior track, but physical wall repositioning fails.
+Corner classification correct.
 
-Revit reports an error stating that the elements are reversed.
+The previous "elements are reversed" error no longer occurs.
 
-This is currently the only known failing test scenario.
+Brick-condition assignment correct.
 
-The failure has not yet been investigated and should be preserved as the baseline for the next refactor stage.
+Physical wall repositioning successful.
 
 ---
 
@@ -130,7 +122,7 @@ The failure has not yet been investigated and should be preserved as the baselin
 
 Error / Notes:
 
-Each sorted wall segment preserves its original Revit LocationCurve direction.
+Corner classification correct.
 
 Brick-condition assignment correct.
 
@@ -140,47 +132,30 @@ Physical wall repositioning successful.
 
 ## Overall Result
 
-The non-flipped engine has been successfully refactored to match the flipped engine through Part E.
+The same local corner-classification algorithm now works correctly for all tested scenarios in both the flipped and non-flipped engines.
 
-Five of the six principal test scenarios currently complete successfully:
+The previous dependency on global loop orientation is no longer required for executable corner-classification logic.
 
-Flipped open run
-Flipped clockwise closed loop
-Flipped anti-clockwise closed loop
-Non-flipped open run
-Non-flipped clockwise closed loop
+The earlier failure affecting non-flipped anti-clockwise closed loops has been resolved by adopting the same local cross-product rule used by the flipped engine.
 
-The remaining failure is:
+This establishes a common geometric rule across both engines:
 
-Non-flipped anti-clockwise closed loop
-
-This scenario reaches the physical wall-repositioning stage but fails with a Revit error indicating that elements are reversed.
-
-Diagnostics otherwise support the following shared geometric invariant:
-
-Outside lies on the LEFT of the selected sorted exterior track.
-Wall core lies on the RIGHT of the selected sorted exterior track.
-
-The failing anti-clockwise scenario may therefore relate to downstream wall orientation or LocationCurve replacement rather than the selection and sorting architecture itself. This remains a hypothesis and has not yet been proven.
+- Outside lies on the LEFT of the selected sorted exterior track.
+- Wall core lies on the RIGHT of the selected sorted exterior track.
+- RIGHT turn (negative cross product) = external corner.
+- LEFT turn (positive cross product) = internal corner.
 
 ---
 
 ## Next Change / Hypothesis
 
-Refactor Part F of the non-flipped engine to replace the legacy global is_ccw logic with the same local corner-classification rule used successfully by the flipped engine.
+Remove the now-obsolete global is_ccw calculation from the non-flipped engine and verify that all six test scenarios continue to pass.
 
-Test all six scenarios again after that single logical change.
-
-Particular attention should be given to the non-flipped anti-clockwise closed loop to determine whether:
-
-- the local Part F classification resolves the reversed-elements error, or
-- the error originates later in Part H during physical wall repositioning.
-
-Do not remove any additional logic until this has been tested.
+If successful, both engines will use identical executable Part F logic, leaving only code cleanup and consolidation before moving on to the next stage.
 
 
 ## Commit Message
 
-Refactor non-flipped engine Parts B-E to match flipped engine
+Refactor non-flipped Part F to use local corner classification
 
 
