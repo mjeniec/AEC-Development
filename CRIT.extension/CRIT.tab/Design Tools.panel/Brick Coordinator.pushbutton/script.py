@@ -1592,10 +1592,20 @@ else:
     t_move.Start()
 
     try:
+        # STEP 1: Temporarily disallow joins on all walls before repositioning
         for edge_data in EDGES_copy:
             wall = edge_data["Wall Object"]
+
+            if wall is not None:
+                WallUtils.DisallowWallJoinAtEnd(wall, 0)
+                WallUtils.DisallowWallJoinAtEnd(wall, 1)
+
+        # STEP 2: Reposition each wall
+        for edge_data in EDGES_copy:
+            wall = edge_data["Wall Object"]
+                
             if wall is None:
-                continue
+                    continue
 
             wall_loc = wall.Location
 
@@ -1641,13 +1651,23 @@ else:
 
             # 9. Force the Wall location parameter reference back to Wall Centerline (Value 0)
             loc_param = wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM)
+            
             if loc_param and not loc_param.IsReadOnly:
                 loc_param.Set(0) 
 
             # 10. Overwrite the location line curve property to snap the wall cleanly into place
             wall_loc.Curve = new_line
 
+        # STEP 3: Restore joins after all walls have been repositioned
+        for edge_data in EDGES_copy:
+            wall = edge_data["Wall Object"]
+
+            if wall is not None:
+                WallUtils.AllowWallJoinAtEnd(wall, 0)
+                WallUtils.AllowWallJoinAtEnd(wall, 1)
+
         t_move.Commit()
+
         print("\n[SUCCESS]: Physical walls have been automatically adjusted to match brick dimensions.")
         uidoc.RefreshActiveView()
 

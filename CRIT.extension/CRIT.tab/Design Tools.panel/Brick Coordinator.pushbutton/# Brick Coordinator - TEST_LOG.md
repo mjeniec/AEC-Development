@@ -2,42 +2,42 @@
 
 ---
 
-# Commit 005
+# Commit 006
 
 ---
 
 ## Git Commit #
 
-005
+006
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped Part H LocationCurve validation
+Refactor non-flipped Part H wall join management
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine's Part H so that the wall Location is retrieved and validated before any repositioning calculations are performed.
+Refactored the non-flipped engine's Part H to temporarily disable wall joins before repositioning and restore them after all walls have been moved.
 
 Changes include:
 
-- Moved retrieval of wall.Location to the beginning of the repositioning loop.
-- Validated that wall.Location is a LocationCurve immediately after retrieving it.
-- Removed the later nested isinstance(wall_loc, LocationCurve) check.
-- Left all centreline-offset calculations, repositioning logic and wall movement unchanged.
+- Added a preprocessing loop to disallow joins at both ends of every selected wall before repositioning begins.
+- Left the existing wall repositioning algorithm unchanged.
+- Added a post-processing loop to restore wall joins after all walls have been repositioned.
+- Adopted the same wall join management sequence already used by the flipped engine.
 
 ---
 
 ## Reason for Change
 
-The flipped engine validates the wall's LocationCurve before performing any repositioning calculations.
+The flipped engine temporarily disables wall joins while walls are being repositioned to prevent Revit from automatically modifying wall geometry during the movement process.
 
-This change brings the non-flipped engine into the same architectural structure, allowing the remainder of Part H to assume that a valid LocationCurve exists.
+Introducing the same behaviour into the non-flipped engine reduces another architectural difference between the two Part H implementations without altering the centreline repositioning algorithm.
 
-The intention is to make the control flow of both engines identical before refactoring the remaining behavioural differences.
+This continues the process of making both engines execute the same sequence of operations before unifying the remaining repositioning logic.
 
 ---
 
@@ -79,9 +79,9 @@ Not tested as no change.
 
 Error / Notes:
 
-Wall repositioning unchanged.
+Wall repositioning successful.
 
-No behavioural differences observed.
+Wall joins restored correctly.
 
 ---
 
@@ -90,9 +90,10 @@ No behavioural differences observed.
 
 Error / Notes:
 
-Wall repositioning unchanged.
+Wall repositioning successful.
 
-No behavioural differences observed.
+Wall joins restored correctly.
+
 
 ---
 
@@ -101,34 +102,38 @@ No behavioural differences observed.
 
 Error / Notes:
 
-Wall repositioning unchanged.
+Wall repositioning successful.
 
-No behavioural differences observed.
+Wall joins restored correctly.
 
 ---
 
 ## Overall Result
 
-Moving the LocationCurve validation to the beginning of the repositioning loop does not change behaviour.
+Introducing temporary wall join management does not alter the repositioning behaviour of the non-flipped engine for the tested scenarios.
 
-The non-flipped engine now follows the same execution structure as the flipped engine by validating the wall location before entering the repositioning calculations.
+The non-flipped engine now follows the same high-level repositioning workflow as the flipped engine by:
 
-This reduces one architectural difference between the two Part H implementations without altering the repositioning algorithm.
+temporarily disabling wall joins;
+repositioning all walls; and
+restoring wall joins once repositioning is complete.
+
+This removes another architectural difference between the two Part H implementations.
+
+A separate pre-existing issue remains on some irregular closed-loop layouts, where corners may not reconnect perfectly after resizing. As this behaviour predates the current refactor and differs between the two engines, it has been deferred until both engines share identical repositioning logic.
+
 
 ---
 
 ## Next Change / Hypothesis
 
-Introduce temporary wall join management into the non-flipped engine by:
+Replace the non-flipped engine's single-candidate centreline offset selection with the flipped engine's two-candidate centreline selection algorithm.
 
-- disallowing joins before repositioning; and
-- restoring joins after repositioning.
-
-This behaviour already exists in the flipped engine and should be independent of the centreline repositioning calculations.
+Once both engines determine the centreline offset using the same two-candidate comparison, the initial perpendicular direction should no longer influence the result, removing another substantive behavioural difference between the two Part H implementations.
 
 
 ## Commit Message
 
-Refactor non-flipped Part H LocationCurve validation
+Refactor non-flipped Part H wall join management
 
 
