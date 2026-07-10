@@ -2,42 +2,44 @@
 
 ---
 
-# Commit 006
+# Commit 007
 
 ---
 
 ## Git Commit #
 
-006
+007
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped Part H wall join management
+Refactor non-flipped Part H centreline offset selection
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine's Part H to temporarily disable wall joins before repositioning and restore them after all walls have been moved.
+Refactored the non-flipped engine's Part H to replace the original single-candidate centreline offset selection with the same two-candidate comparison used by the flipped engine.
 
 Changes include:
 
-- Added a preprocessing loop to disallow joins at both ends of every selected wall before repositioning begins.
-- Left the existing wall repositioning algorithm unchanged.
-- Added a post-processing loop to restore wall joins after all walls have been repositioned.
-- Adopted the same wall join management sequence already used by the flipped engine.
+- Removed the single-candidate distance test used to determine whether the perpendicular vector should be reversed.
+- Created two candidate centreline positions by offsetting the selected exterior track in both perpendicular directions.
+- Measured the distance from each candidate position to the existing wall LocationCurve.
+- Selected the candidate closest to the existing wall centreline.
+- Introduced a correct_shift_vector variable to store the chosen offset direction.
+- Updated the centreline calculation to use correct_shift_vector rather than the modified perpendicular vector.
 
 ---
 
 ## Reason for Change
 
-The flipped engine temporarily disables wall joins while walls are being repositioned to prevent Revit from automatically modifying wall geometry during the movement process.
+The flipped engine already determines the centreline offset by comparing both possible offset directions and selecting whichever lies closest to the existing wall centreline.
 
-Introducing the same behaviour into the non-flipped engine reduces another architectural difference between the two Part H implementations without altering the centreline repositioning algorithm.
+Replacing the non-flipped engine's threshold-based single-candidate method with the same comparison removes one of the final behavioural differences between the two Part H implementations.
 
-This continues the process of making both engines execute the same sequence of operations before unifying the remaining repositioning logic.
+This approach is simpler, more explicit and independent of assumptions about the initial perpendicular direction.
 
 ---
 
@@ -81,7 +83,7 @@ Error / Notes:
 
 Wall repositioning successful.
 
-Wall joins restored correctly.
+No behavioural differences observed.
 
 ---
 
@@ -92,7 +94,7 @@ Error / Notes:
 
 Wall repositioning successful.
 
-Wall joins restored correctly.
+No behavioural differences observed.
 
 
 ---
@@ -104,36 +106,45 @@ Error / Notes:
 
 Wall repositioning successful.
 
-Wall joins restored correctly.
+No behavioural differences observed.
+
+---
+
+## Additional Testing – Irregular Closed Loops (L-shaped)
+
+[x]
+
+Error / Notes:
+
+Multiple L-shaped closed loops of varying sizes and drawing directions were tested.
+
+The majority repositioned and rejoined correctly.
+
+One intermittent corner overlap was observed, but the behaviour could not be reproduced consistently and showed no clear relationship to wall direction, loop orientation or layout geometry.
+
+The issue is therefore considered a separate intermittent reconstruction problem rather than a regression introduced by the two-candidate centreline selection algorithm.
 
 ---
 
 ## Overall Result
 
-Introducing temporary wall join management does not alter the repositioning behaviour of the non-flipped engine for the tested scenarios.
+The two-candidate centreline selection algorithm works correctly for all standard non-flipped test scenarios.
 
-The non-flipped engine now follows the same high-level repositioning workflow as the flipped engine by:
+The non-flipped engine now determines the centreline offset using the same explicit comparison method as the flipped engine, removing another substantive behavioural difference between the two Part H implementations.
 
-temporarily disabling wall joins;
-repositioning all walls; and
-restoring wall joins once repositioning is complete.
-
-This removes another architectural difference between the two Part H implementations.
-
-A separate pre-existing issue remains on some irregular closed-loop layouts, where corners may not reconnect perfectly after resizing. As this behaviour predates the current refactor and differs between the two engines, it has been deferred until both engines share identical repositioning logic.
-
+An intermittent corner overlap remains on some irregular closed-loop layouts, but testing suggests this behaviour is unrelated to the centreline offset selection algorithm and should be investigated separately once both Part H implementations have been fully unified.
 
 ---
 
 ## Next Change / Hypothesis
 
-Replace the non-flipped engine's single-candidate centreline offset selection with the flipped engine's two-candidate centreline selection algorithm.
+Align the remaining Part H implementation details with the flipped engine by replacing the remaining non-flipped variable names and geometry terminology (pt_start_ext, dir_vector, perpend_normal, etc.) with the corresponding flipped-engine names.
 
-Once both engines determine the centreline offset using the same two-candidate comparison, the initial perpendicular direction should no longer influence the result, removing another substantive behavioural difference between the two Part H implementations.
+Once the two Part H blocks use the same variable names and executable logic, the only remaining behavioural difference should be the explicit wall.Flip() call, which can then be tested independently before consolidating both implementations into a single shared repositioning engine.
 
 
 ## Commit Message
 
-Refactor non-flipped Part H wall join management
+Refactor non-flipped Part H centreline offset selection
 
 

@@ -1630,21 +1630,33 @@ else:
             # 5. Calculate half the wall thickness to find the centerline shift distance
             half_thickness_feet = wall.WallType.Width / 2.0
 
-            # 6. DYNAMIC TEST: Check if this normal points towards the wall core or away from it
-            test_shift_pt = pt_start_ext + (perpend_normal * half_thickness_feet)
+            # 6. DYNAMIC TEST: Compare both possible centreline positions
 
-            # Measure distance from our test point to the actual existing wall centerline axis line
-            dist_to_existing_center = wall_loc.Curve.Distance(test_shift_pt)
+            test_pt_positive = (
+                pt_start_ext
+                + perpend_normal * half_thickness_feet
+            )
 
-            # If the shifted point is further away than the full thickness of the wall,
-            # it means the vector pointed OUT into empty space instead of IN towards the wall core.
-            if dist_to_existing_center > wall.WallType.Width:
-                # Flip the vector 180 degrees to correct it dynamically
-                perpend_normal = XYZ(-dir_vector.Y, dir_vector.X, 0.0)
+            test_pt_negative = (
+                pt_start_ext
+                - perpend_normal * half_thickness_feet
+            )
 
-            # 7. Shift the exterior target points using the verified normal to find the true centerline
-            pt_start_center = pt_start_ext + (perpend_normal * half_thickness_feet)
-            pt_end_center = pt_end_ext + (perpend_normal * half_thickness_feet)
+            dist_pos = wall_loc.Curve.Distance(test_pt_positive)
+            dist_neg = wall_loc.Curve.Distance(test_pt_negative)
+
+            if dist_pos < dist_neg:
+                correct_shift_vector = (
+                    perpend_normal * half_thickness_feet
+                )
+            else:
+                correct_shift_vector = (
+                    -perpend_normal * half_thickness_feet
+                )
+
+            # 7. Shift the exterior target points using the verified offset vector
+            pt_start_center = pt_start_ext + correct_shift_vector
+            pt_end_center = pt_end_ext + correct_shift_vector
 
             # 8. Build the new bounded line geometry along the centerline axis
             new_line = Line.CreateBound(pt_start_center, pt_end_center)
