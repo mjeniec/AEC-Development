@@ -2,45 +2,42 @@
 
 ---
 
-# Commit 004
+# Commit 005
 
 ---
 
 ## Git Commit #
 
-004
+005
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped Part F to use local corner classification
+Refactor non-flipped Part H LocationCurve validation
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine's Part F corner classification to match the flipped engine.
+Refactored the non-flipped engine's Part H so that the wall Location is retrieved and validated before any repositioning calculations are performed.
 
 Changes include:
 
-- Removed dependence on global clockwise/anti-clockwise loop direction when determining corner types.
-- Replaced the conditional is_ccw corner tests with direct local cross-product classification.
-- Both engines now classify corners using the same rule:
-- Outside lies on the LEFT of the selected exterior track.
-- A RIGHT turn (negative cross product) is an external corner.
-- A LEFT turn (positive cross product) is an internal corner.
-- The legacy is_ccw calculation has been retained temporarily but is no longer used by the corner-classification logic.
+- Moved retrieval of wall.Location to the beginning of the repositioning loop.
+- Validated that wall.Location is a LocationCurve immediately after retrieving it.
+- Removed the later nested isinstance(wall_loc, LocationCurve) check.
+- Left all centreline-offset calculations, repositioning logic and wall movement unchanged.
 
 ---
 
 ## Reason for Change
 
-Following the Parts B–E refactor, both the flipped and non-flipped engines now produce the same geometric invariant before entering Part F.
+The flipped engine validates the wall's LocationCurve before performing any repositioning calculations.
 
-This made it possible to replace the remaining orientation-dependent logic with the same local corner-classification algorithm already proven in the flipped engine.
+This change brings the non-flipped engine into the same architectural structure, allowing the remainder of Part H to assume that a valid LocationCurve exists.
 
-The aim is to eliminate dependence on whole-loop orientation and instead classify each corner purely from local geometry.
+The intention is to make the control flow of both engines identical before refactoring the remaining behavioural differences.
 
 ---
 
@@ -49,41 +46,29 @@ The aim is to eliminate dependence on whole-loop orientation and instead classif
 ## FLIPPED (Exterior on Left)
 
 ### Closed Loop - Clockwise
-[x]
+[ ]
 
 Error / Notes:
 
-Corner classification correct.
-
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+Not tested as no change.
 
 ---
 
 ### Closed Loop - Anti-clockwise
-[x]
+[ ]
 
 Error / Notes:
 
-Corner classification correct.
-
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+Not tested as no change.
 
 ---
 
 ### Open Loop
-[x]
+[ ]
 
 Error / Notes:
 
-Corner classification correct.
-
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+Not tested as no change.
 
 ---
 
@@ -94,11 +79,9 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Corner classification correct.
+Wall repositioning unchanged.
 
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+No behavioural differences observed.
 
 ---
 
@@ -107,13 +90,9 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Corner classification correct.
+Wall repositioning unchanged.
 
-The previous "elements are reversed" error no longer occurs.
-
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+No behavioural differences observed.
 
 ---
 
@@ -122,40 +101,34 @@ Physical wall repositioning successful.
 
 Error / Notes:
 
-Corner classification correct.
+Wall repositioning unchanged.
 
-Brick-condition assignment correct.
-
-Physical wall repositioning successful.
+No behavioural differences observed.
 
 ---
 
 ## Overall Result
 
-The same local corner-classification algorithm now works correctly for all tested scenarios in both the flipped and non-flipped engines.
+Moving the LocationCurve validation to the beginning of the repositioning loop does not change behaviour.
 
-The previous dependency on global loop orientation is no longer required for executable corner-classification logic.
+The non-flipped engine now follows the same execution structure as the flipped engine by validating the wall location before entering the repositioning calculations.
 
-The earlier failure affecting non-flipped anti-clockwise closed loops has been resolved by adopting the same local cross-product rule used by the flipped engine.
-
-This establishes a common geometric rule across both engines:
-
-- Outside lies on the LEFT of the selected sorted exterior track.
-- Wall core lies on the RIGHT of the selected sorted exterior track.
-- RIGHT turn (negative cross product) = external corner.
-- LEFT turn (positive cross product) = internal corner.
+This reduces one architectural difference between the two Part H implementations without altering the repositioning algorithm.
 
 ---
 
 ## Next Change / Hypothesis
 
-Remove the now-obsolete global is_ccw calculation from the non-flipped engine and verify that all six test scenarios continue to pass.
+Introduce temporary wall join management into the non-flipped engine by:
 
-If successful, both engines will use identical executable Part F logic, leaving only code cleanup and consolidation before moving on to the next stage.
+- disallowing joins before repositioning; and
+- restoring joins after repositioning.
+
+This behaviour already exists in the flipped engine and should be independent of the centreline repositioning calculations.
 
 
 ## Commit Message
 
-Refactor non-flipped Part F to use local corner classification
+Refactor non-flipped Part H LocationCurve validation
 
 

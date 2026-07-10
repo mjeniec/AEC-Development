@@ -539,12 +539,16 @@ if flipped_count > 0:
 
 
 # def cross_product: Calculates thes Z value of the cross product for 3 points. 
-# Returns a positive or negative value describing the turn direction
-# between three consecutive points (p1 -> p2 -> p3).
+
+# Returns the signed Z component of the cross product formed by
+# three consecutive points (p1 → p2 → p3).
 #
-# The sign (positive or negative) is later used to determine the overall
-# loop direction (clockwise or counter-clockwise) and identify
-# internal/external corners.
+# Positive value  = left turn
+# Negative value  = right turn
+#
+# Since the selected exterior track always has OUTSIDE on its LEFT,
+# right turns represent external corners and left turns represent
+# internal corners.
 
     def cross_product_z(p1, p2, p3):
         v1_x = p2.X - p1.X
@@ -552,25 +556,7 @@ if flipped_count > 0:
         v2_x = p3.X - p2.X
         v2_y = p3.Y - p2.Y
         return (v1_x * v2_y) - (v1_y * v2_x)
-
-    user_direction_override = False 
-    
-# NOTE potential removal below
-# Calculate whether diection is cw of ccw
-    if is_closed_loop_layout:
-        total_turn_sign = 0 
-        for i in range(num_edges):
-            edge_curr = ordered[i]
-            edge_next = ordered[(i + 1) % num_edges] 
-            # Use the modulo (%) operator to wrap from the last edge back to the first,
-            # allowing the final corner of a closed loop to be analysed.
-            cp_z = cross_product_z(edge_curr[0], edge_curr[1], edge_next[1]) 
-            if cp_z > 0: total_turn_sign += 1
-            elif cp_z < 0: total_turn_sign -= 1
-        is_ccw = total_turn_sign > 0 
-    else:
-        is_ccw = user_direction_override # NOTE check this as default should cause mistakes but doesn't
-
+   
     print("\n===== PART F: CORNER CLASSIFICATION =====")
     print("Closed Loop :", is_closed_loop_layout)
     print("Rule        : OUTSIDE is LEFT of selected exterior track")
@@ -610,7 +596,6 @@ if flipped_count > 0:
             # Turn from previous edge into current edge
             cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
 
-            # New rule:
             # cp_start_z > 0 means the path turns LEFT.
             # Since outside is on the LEFT, a LEFT turn is INTERNAL.
             if cp_start_z < 0:
@@ -638,7 +623,6 @@ if flipped_count > 0:
             # Turn from current edge into next edge
             cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
 
-            # New rule:
             # cp_end_z > 0 means the path turns LEFT.
             # Since outside is on the LEFT, a LEFT turn is INTERNAL.
             if cp_end_z < 0:
@@ -1476,21 +1460,6 @@ else:
         v2_y = p3.Y - p2.Y
         return (v1_x * v2_y) - (v1_y * v2_x)
     
-    # NOTE potential removal below
-    user_direction_override = False 
-    
-    if is_closed_loop_layout:
-        total_turn_sign = 0 
-        for i in range(num_edges):
-            edge_curr = ordered[i]
-            edge_next = ordered[(i + 1) % num_edges]
-            cp_z = cross_product_z(edge_curr[0], edge_curr[1], edge_next[0])
-            if cp_z > 0: total_turn_sign += 1
-            elif cp_z < 0: total_turn_sign -= 1
-        is_ccw = total_turn_sign > 0 
-    else:
-        is_ccw = user_direction_override 
-
     for i in range(num_edges):
         edge_curr = ordered[i]
         pt_start = edge_curr[0]
@@ -1545,7 +1514,7 @@ else:
         EDGES.append(wall_info)
 
     # ==============================================================================
-    # PHASE 5: RESIZE LENGTH CALCULATION FUNCTION & HORIZONTAL PROJECTIONS
+    # G. RESIZE LENGTH 
     # ==============================================================================
     def resize(length, condition):
         if condition == "Co-": grid_length = length + 10
@@ -1606,7 +1575,7 @@ else:
         prev_end_pt = EDGES_copy[i]["Points List"][1]
 
     # ==============================================================================
-    # PHASE 6: FINAL PRINT REPORT
+    # FINAL PRINT REPORT
     # ==============================================================================
     print("\n--- BRICK COORDINATOR PROCESSED OUTPUT ---")
     for idx in range(len(EDGES)):
@@ -1616,7 +1585,7 @@ else:
         print("  -> Target Brick Dim: {:.1f}mm".format(EDGES_copy[idx]["Length"]))
 
     # ==============================================================================
-    # PHASE 7: AUTOMATIC PHYSICAL MODEL REPOSITIONING (UNIVERSAL SHAPE ENGINE)
+    # H: AUTOMATIC PHYSICAL MODEL REPOSITIONING (NON-FLIP ENGINE)
     # ==============================================================================
     # Open a database transaction to push changes into the active Revit document
     t_move = Transaction(doc, "Reposition and Co-ordinate Walls")
@@ -1626,6 +1595,11 @@ else:
         for edge_data in EDGES_copy:
             wall = edge_data["Wall Object"]
             if wall is None:
+                continue
+
+            wall_loc = wall.Location
+
+            if not isinstance(wall_loc, LocationCurve):
                 continue
 
             # 1. Pull the newly calculated exterior brick target coordinates from Phase 5
@@ -1649,16 +1623,14 @@ else:
             # 6. DYNAMIC TEST: Check if this normal points towards the wall core or away from it
             test_shift_pt = pt_start_ext + (perpend_normal * half_thickness_feet)
 
-            wall_loc = wall.Location
-            if isinstance(wall_loc, LocationCurve):
-                # Measure distance from our test point to the actual existing wall centerline axis line
-                dist_to_existing_center = wall_loc.Curve.Distance(test_shift_pt)
+            # Measure distance from our test point to the actual existing wall centerline axis line
+            dist_to_existing_center = wall_loc.Curve.Distance(test_shift_pt)
 
-                # If the shifted point is further away than the full thickness of the wall, 
-                # it means the vector pointed OUT into empty space instead of IN towards the wall core.
-                if dist_to_existing_center > wall.WallType.Width:
-                    # Flip the vector 180 degrees to correct it dynamically
-                    perpend_normal = XYZ(-dir_vector.Y, dir_vector.X, 0.0)
+            # If the shifted point is further away than the full thickness of the wall,
+            # it means the vector pointed OUT into empty space instead of IN towards the wall core.
+            if dist_to_existing_center > wall.WallType.Width:
+                # Flip the vector 180 degrees to correct it dynamically
+                perpend_normal = XYZ(-dir_vector.Y, dir_vector.X, 0.0)
 
             # 7. Shift the exterior target points using the verified normal to find the true centerline
             pt_start_center = pt_start_ext + (perpend_normal * half_thickness_feet)
