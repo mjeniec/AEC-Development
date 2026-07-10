@@ -2,53 +2,71 @@
 
 ---
 
-# Commit 008
+# Commit 009
 
 ---
 
 ## Git Commit #
 
-008
+009
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped Part H perpendicular vector initialisation 
+Unify Part H wall orientation handling
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine's Part H so that both the geometry terminology and initial perpendicular vector calculation now match the flipped engine.
+Refactored the non-flipped engine's Part H to include the same conditional wall orientation handling used by the flipped engine.
 
 Changes include:
 
-- Renamed the remaining Part H geometry variables to match the flipped engine:
-- pt_start_ext → pt_start_track
-- pt_end_ext → pt_end_track
-- dir_vector → track_dir
-- perpend_normal → perpend_vector
-- Replaced the non-flipped perpendicular vector calculation with the equivalent expression used by the flipped engine.
-- The initial perpendicular vector now points in the same direction in both engines.
-- The previously introduced two-candidate centreline selection algorithm was retained unchanged.
-- No other repositioning calculations were modified
+Added the conditional wall orientation check:
+
+if wall.Flipped:
+    wall.Flip()
+
+immediately before assigning the new LocationCurve.
+
+The remainder of the repositioning algorithm was left unchanged.
+Both flipped and non-flipped Part H implementations now execute the same sequence of operations.
 
 ---
 
 ## Reason for Change
 
-Following the previous refactor, both engines determine the correct centreline by explicitly comparing both possible offset directions.
+Following the previous refactoring work, the repositioning algorithms used by the flipped and non-flipped engines had become functionally identical.
 
-This means the initial perpendicular direction should no longer influence the final result.
+The only remaining executable difference was the conditional wall.Flip() call.
 
-Aligning both the geometry terminology and the initial perpendicular vector calculation removes another architectural difference between the two Part H implementations and confirms that the two-candidate centreline selection algorithm is independent of the initial vector orientation.
+A temporary experiment removing this statement from the flipped engine demonstrated that flipped walls consistently finished with the wrong orientation after assigning the new LocationCurve.
+
+The experiment also confirmed that the conditional has no effect on non-flipped walls because the call is only executed when wall.Flipped is True.
+
+This makes the conditional suitable for inclusion in a shared repositioning algorithm.
 
 ---
 
 # Revit Test Results
 
 ## FLIPPED (Exterior on Left)
+
+Temporary Experiment
+
+[x]
+
+Error / Notes:
+
+Removed the conditional wall.Flip() call before assigning the new LocationCurve.
+
+All flipped test cases finished with incorrect wall orientation after repositioning.
+
+This confirms that the conditional flip remains necessary.
+
+The original code was restored before continuing.
 
 ### Closed Loop - Clockwise
 [ ]
@@ -86,7 +104,7 @@ Error / Notes:
 
 Wall repositioning successful.
 
-No behavioural differences observed.
+Adding the conditional wall.Flip() statement produced no behavioural change.
 
 ---
 
@@ -97,7 +115,7 @@ Error / Notes:
 
 Wall repositioning successful.
 
-No behavioural differences observed.
+Adding the conditional wall.Flip() statement produced no behavioural change.
 
 
 ---
@@ -109,47 +127,32 @@ Error / Notes:
 
 Wall repositioning successful.
 
-No behavioural differences observed.
+Adding the conditional wall.Flip() statement produced no behavioural change.
 
 ---
 
-## Additional Testing – Irregular Closed Loops (L-shaped)
-
-[x]
-
-Error / Notes:
-
-Multiple L-shaped closed loops of varying sizes and drawing directions were tested.
-
-The majority repositioned and rejoined correctly.
-
-One intermittent corner overlap was observed during testing.
-
-Although insufficient evidence exists to establish a pattern, the overlap appeared to occur more frequently on layouts drawn in a clockwise direction. Further investigation is required before drawing any conclusions.
-
-No evidence suggests that changing the initial perpendicular vector introduced or increased the occurrence of the issue.
-
----
 
 ## Overall Result
 
-Changing the initial perpendicular vector to match the flipped engine, together with adopting the same geometry variable naming, produced no observable behavioural changes in the standard non-flipped test scenarios.
+The conditional wall orientation handling has now been verified to behave correctly in both engines.
 
-This confirms the hypothesis that, once both candidate centreline positions are evaluated explicitly, the initial perpendicular direction no longer affects the final centreline selected.
+For flipped walls, the conditional wall.Flip() call remains necessary to preserve the correct final wall orientation after assigning the new LocationCurve.
 
-The two Part H implementations now use the same geometry terminology and effectively identical repositioning logic, with the only remaining executable behavioural difference being the explicit wall.Flip() call in the flipped engine.
+For non-flipped walls, the condition evaluates to False, so no additional action is taken.
+
+Both engines now execute the same Part H repositioning algorithm, with identical executable logic.
 
 ---
 
 ## Next Change / Hypothesis
 
-Investigate the remaining behavioural difference between the two Part H implementations by testing the necessity of the explicit wall.Flip() call in the flipped engine.
+The flipped and non-flipped Part H implementations are now functionally identical.
 
-Determine whether this operation is still required now that both engines use the same repositioning logic, or whether it can be removed while preserving the correct wall orientation for all flipped-wall scenarios.
+The next stage of the refactor is to begin removing duplicated code by consolidating the shared Part H implementation into a single reusable section, while verifying after each consolidation step that all standard flipped and non-flipped test scenarios continue to pass.
 
 
 ## Commit Message
 
-Refactor non-flipped Part H perpendicular vector initialisation
+Unify Part H wall orientation handling
 
 

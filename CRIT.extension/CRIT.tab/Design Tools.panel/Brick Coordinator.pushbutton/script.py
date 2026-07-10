@@ -915,6 +915,7 @@ if flipped_count > 0:
                 # test whether this wall.Flip() call is still necessary or whether it should
                 # be removed or replaced with logic that preserves the user's original flip state.
 
+                
                 if wall.Flipped:
                     wall.Flip()
 
@@ -1678,6 +1679,9 @@ else:
             
             if loc_param and not loc_param.IsReadOnly:
                 loc_param.Set(0) 
+
+            if wall.Flipped:
+                    wall.Flip()    
 
             # 10. Overwrite the location line curve property to snap the wall cleanly into place
             wall_loc.Curve = new_line
