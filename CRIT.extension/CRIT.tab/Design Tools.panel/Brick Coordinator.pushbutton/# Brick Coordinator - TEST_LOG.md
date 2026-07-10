@@ -2,44 +2,47 @@
 
 ---
 
-# Commit 007
+# Commit 008
 
 ---
 
 ## Git Commit #
 
-007
+008
 
 ---
 
 ## Commit Message
 
-Refactor non-flipped Part H centreline offset selection
+Refactor non-flipped Part H perpendicular vector initialisation 
 
 ---
 
 ## Change Made
 
-Refactored the non-flipped engine's Part H to replace the original single-candidate centreline offset selection with the same two-candidate comparison used by the flipped engine.
+Refactored the non-flipped engine's Part H so that both the geometry terminology and initial perpendicular vector calculation now match the flipped engine.
 
 Changes include:
 
-- Removed the single-candidate distance test used to determine whether the perpendicular vector should be reversed.
-- Created two candidate centreline positions by offsetting the selected exterior track in both perpendicular directions.
-- Measured the distance from each candidate position to the existing wall LocationCurve.
-- Selected the candidate closest to the existing wall centreline.
-- Introduced a correct_shift_vector variable to store the chosen offset direction.
-- Updated the centreline calculation to use correct_shift_vector rather than the modified perpendicular vector.
+- Renamed the remaining Part H geometry variables to match the flipped engine:
+- pt_start_ext → pt_start_track
+- pt_end_ext → pt_end_track
+- dir_vector → track_dir
+- perpend_normal → perpend_vector
+- Replaced the non-flipped perpendicular vector calculation with the equivalent expression used by the flipped engine.
+- The initial perpendicular vector now points in the same direction in both engines.
+- The previously introduced two-candidate centreline selection algorithm was retained unchanged.
+- No other repositioning calculations were modified
 
 ---
 
 ## Reason for Change
 
-The flipped engine already determines the centreline offset by comparing both possible offset directions and selecting whichever lies closest to the existing wall centreline.
+Following the previous refactor, both engines determine the correct centreline by explicitly comparing both possible offset directions.
 
-Replacing the non-flipped engine's threshold-based single-candidate method with the same comparison removes one of the final behavioural differences between the two Part H implementations.
+This means the initial perpendicular direction should no longer influence the final result.
 
-This approach is simpler, more explicit and independent of assumptions about the initial perpendicular direction.
+Aligning both the geometry terminology and the initial perpendicular vector calculation removes another architectural difference between the two Part H implementations and confirms that the two-candidate centreline selection algorithm is independent of the initial vector orientation.
 
 ---
 
@@ -120,31 +123,33 @@ Multiple L-shaped closed loops of varying sizes and drawing directions were test
 
 The majority repositioned and rejoined correctly.
 
-One intermittent corner overlap was observed, but the behaviour could not be reproduced consistently and showed no clear relationship to wall direction, loop orientation or layout geometry.
+One intermittent corner overlap was observed during testing.
 
-The issue is therefore considered a separate intermittent reconstruction problem rather than a regression introduced by the two-candidate centreline selection algorithm.
+Although insufficient evidence exists to establish a pattern, the overlap appeared to occur more frequently on layouts drawn in a clockwise direction. Further investigation is required before drawing any conclusions.
+
+No evidence suggests that changing the initial perpendicular vector introduced or increased the occurrence of the issue.
 
 ---
 
 ## Overall Result
 
-The two-candidate centreline selection algorithm works correctly for all standard non-flipped test scenarios.
+Changing the initial perpendicular vector to match the flipped engine, together with adopting the same geometry variable naming, produced no observable behavioural changes in the standard non-flipped test scenarios.
 
-The non-flipped engine now determines the centreline offset using the same explicit comparison method as the flipped engine, removing another substantive behavioural difference between the two Part H implementations.
+This confirms the hypothesis that, once both candidate centreline positions are evaluated explicitly, the initial perpendicular direction no longer affects the final centreline selected.
 
-An intermittent corner overlap remains on some irregular closed-loop layouts, but testing suggests this behaviour is unrelated to the centreline offset selection algorithm and should be investigated separately once both Part H implementations have been fully unified.
+The two Part H implementations now use the same geometry terminology and effectively identical repositioning logic, with the only remaining executable behavioural difference being the explicit wall.Flip() call in the flipped engine.
 
 ---
 
 ## Next Change / Hypothesis
 
-Align the remaining Part H implementation details with the flipped engine by replacing the remaining non-flipped variable names and geometry terminology (pt_start_ext, dir_vector, perpend_normal, etc.) with the corresponding flipped-engine names.
+Investigate the remaining behavioural difference between the two Part H implementations by testing the necessity of the explicit wall.Flip() call in the flipped engine.
 
-Once the two Part H blocks use the same variable names and executable logic, the only remaining behavioural difference should be the explicit wall.Flip() call, which can then be tested independently before consolidating both implementations into a single shared repositioning engine.
+Determine whether this operation is still required now that both engines use the same repositioning logic, or whether it can be removed while preserving the correct wall orientation for all flipped-wall scenarios.
 
 
 ## Commit Message
 
-Refactor non-flipped Part H centreline offset selection
+Refactor non-flipped Part H perpendicular vector initialisation
 
 

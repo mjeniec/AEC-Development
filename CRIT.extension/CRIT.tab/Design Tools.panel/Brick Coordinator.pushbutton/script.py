@@ -1618,28 +1618,40 @@ else:
             end_mm = edge_data["Points List"][1]
 
             # 2. Convert exterior metric coordinate values back into native Revit Imperial Feet
-            pt_start_ext = XYZ(start_mm[0] / 304.8, start_mm[1] / 304.8, start_mm[2] / 304.8)
-            pt_end_ext = XYZ(end_mm[0] / 304.8, end_mm[1] / 304.8, end_mm[2] / 304.8)
+            pt_start_track = XYZ(
+                start_mm[0] / 304.8,
+                start_mm[1] / 304.8,
+                start_mm[2] / 304.8
+            )
+
+            pt_end_track = XYZ(
+                end_mm[0] / 304.8,
+                end_mm[1] / 304.8,
+                end_mm[2] / 304.8
+            )
 
             # 3. Compute the 2D direction vector of this wall segment
-            dir_vector = (pt_end_ext - pt_start_ext).Normalize()
+            track_dir = (pt_end_track - pt_start_track).Normalize()
 
             # 4. Generate a perpendicular normal vector 
-            perpend_normal = XYZ(dir_vector.Y, -dir_vector.X, 0.0)
+            perpend_vector = XYZ(
+                -track_dir.Y,
+                track_dir.X,
+                0.0
+            )
 
             # 5. Calculate half the wall thickness to find the centerline shift distance
             half_thickness_feet = wall.WallType.Width / 2.0
 
             # 6. DYNAMIC TEST: Compare both possible centreline positions
-
             test_pt_positive = (
-                pt_start_ext
-                + perpend_normal * half_thickness_feet
+                pt_start_track
+                + perpend_vector * half_thickness_feet
             )
 
             test_pt_negative = (
-                pt_start_ext
-                - perpend_normal * half_thickness_feet
+                pt_start_track
+                - perpend_vector * half_thickness_feet
             )
 
             dist_pos = wall_loc.Curve.Distance(test_pt_positive)
@@ -1647,16 +1659,16 @@ else:
 
             if dist_pos < dist_neg:
                 correct_shift_vector = (
-                    perpend_normal * half_thickness_feet
+                    perpend_vector * half_thickness_feet
                 )
             else:
                 correct_shift_vector = (
-                    -perpend_normal * half_thickness_feet
+                    -perpend_vector * half_thickness_feet
                 )
 
             # 7. Shift the exterior target points using the verified offset vector
-            pt_start_center = pt_start_ext + correct_shift_vector
-            pt_end_center = pt_end_ext + correct_shift_vector
+            pt_start_center = pt_start_track + correct_shift_vector
+            pt_end_center = pt_end_track + correct_shift_vector
 
             # 8. Build the new bounded line geometry along the centerline axis
             new_line = Line.CreateBound(pt_start_center, pt_end_center)
