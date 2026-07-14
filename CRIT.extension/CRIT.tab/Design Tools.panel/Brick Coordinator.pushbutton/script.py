@@ -68,8 +68,8 @@ for w in walls:
 # Otherwise, run the original non-flipped-wall engine.
 # Note: the flipped-wall engine intentionally contains its own wall.Flip() / wall_loc.Curve sequence.
 
-if flipped_count > 0:
-    print("[Brick Coordinator Router] Detected {0} flipped wall(s). Running REAL flipped-wall source script.".format(flipped_count))
+if True:
+    print("[Brick Coordinator] Running shared wall-processing engine.")
 
     # ADD PRINT DIAGNOSTIC TO DETERMINE SEQUENCE OF SELECTED WALL ELEMENTS (START AND END POINTS) 
     print("\n===== ORIGINAL REVIT WALLS =====")
@@ -938,767 +938,767 @@ if flipped_count > 0:
         t_move.RollBack()
         UI.TaskDialog.Show("Execution Error", "Failed to reposition structural walls: {}".format(str(e)))
 
-else:
-    print("[Brick Coordinator Router] Detected no flipped walls. Running non-flipped source script.")
+# else:
+#     print("[Brick Coordinator Router] Detected no flipped walls. Running non-flipped source script.")
 
-        # PRINT DIAGNOSTIC TO DETERMINE SEQUENCE OF SELECTED WALL ELEMENTS
-    print("\n===== ORIGINAL REVIT WALLS =====")
+#         # PRINT DIAGNOSTIC TO DETERMINE SEQUENCE OF SELECTED WALL ELEMENTS
+#     print("\n===== ORIGINAL REVIT WALLS =====")
 
-    for i, wall in enumerate(walls):
+#     for i, wall in enumerate(walls):
 
-        curve = wall.Location.Curve
-        start = curve.GetEndPoint(0)
-        end = curve.GetEndPoint(1)
+#         curve = wall.Location.Curve
+#         start = curve.GetEndPoint(0)
+#         end = curve.GetEndPoint(1)
 
-        print("\nWall {}".format(i))
-        print("Element ID :", wall.Id)
-        print("Flipped    :", wall.Flipped)
-        print("Start      : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
-        print("End        : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
+#         print("\nWall {}".format(i))
+#         print("Element ID :", wall.Id)
+#         print("Flipped    :", wall.Flipped)
+#         print("Start      : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
+#         print("End        : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
 
-    # ==========================================================================
-    # NON-FLIPPED-WALL ENGINE
-    # ==========================================================================
-    doc = revit.doc
-    uidoc = revit.uidoc
-    selection = revit.get_selection()
+#     # ==========================================================================
+#     # NON-FLIPPED-WALL ENGINE
+#     # ==========================================================================
+#     doc = revit.doc
+#     uidoc = revit.uidoc
+#     selection = revit.get_selection()
 
-    # ==============================================================================
-    # B. GEOMETRY EXTRACTION: UNIFIED SOLID UNION EXTRACTION & BOUNDARY SEPARATION
-    # ==============================================================================
-    UI.TaskDialog.Show("Brick Layout", "Select your walls, then click Finish on the Options Bar.")
+#     # ==============================================================================
+#     # B. GEOMETRY EXTRACTION: UNIFIED SOLID UNION EXTRACTION & BOUNDARY SEPARATION
+#     # ==============================================================================
+#     UI.TaskDialog.Show("Brick Layout", "Select your walls, then click Finish on the Options Bar.")
 
-    selected_elements = list(selection)
-    walls = [el for el in selected_elements if isinstance(el, Wall)]
+#     selected_elements = list(selection)
+#     walls = [el for el in selected_elements if isinstance(el, Wall)]
 
-    if not walls:
-        UI.TaskDialog.Show("Error", "No valid Walls were selected. Execution aborted.")
-        script.exit()
+#     if not walls:
+#         UI.TaskDialog.Show("Error", "No valid Walls were selected. Execution aborted.")
+#         script.exit()
 
-    # Extracted thickness from the first wall instance safely
-    wall_thickness_feet = walls[0].WallType.Width
+#     # Extracted thickness from the first wall instance safely
+#     wall_thickness_feet = walls[0].WallType.Width
 
-    # 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
-    geo_options = Options()
-    geo_options.ComputeReferences = False
-    geo_options.DetailLevel = ViewDetailLevel.Fine
-    master_solid = None
+#     # 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
+#     geo_options = Options()
+#     geo_options.ComputeReferences = False
+#     geo_options.DetailLevel = ViewDetailLevel.Fine
+#     master_solid = None
 
-    for wall in walls:
-        geo_elem = wall.get_Geometry(geo_options)
-        if geo_elem is None:
-            continue
-        for geo_obj in geo_elem:
-            if isinstance(geo_obj, Solid) and geo_obj.Volume > 0:
-                if master_solid is None:
-                    master_solid = geo_obj
-                else:
-                    try:
-                        master_solid = BooleanOperationsUtils.ExecuteBooleanOperation(
-                            master_solid, geo_obj, BooleanOperationsType.Union
-                        )
-                    except Exception:
-                        pass
+#     for wall in walls:
+#         geo_elem = wall.get_Geometry(geo_options)
+#         if geo_elem is None:
+#             continue
+#         for geo_obj in geo_elem:
+#             if isinstance(geo_obj, Solid) and geo_obj.Volume > 0:
+#                 if master_solid is None:
+#                     master_solid = geo_obj
+#                 else:
+#                     try:
+#                         master_solid = BooleanOperationsUtils.ExecuteBooleanOperation(
+#                             master_solid, geo_obj, BooleanOperationsType.Union
+#                         )
+#                     except Exception:
+#                         pass
 
-    if master_solid is None:
-        UI.TaskDialog.Show("Error", "Could not generate a fused solid geometry from walls.")
-        script.exit()
+#     if master_solid is None:
+#         UI.TaskDialog.Show("Error", "Could not generate a fused solid geometry from walls.")
+#         script.exit()
 
-    # 2. Extract the profile loops from the downward-facing bottom face
-    all_loops = []
-    for face in master_solid.Faces:
-        if isinstance(face, PlanarFace) and face.FaceNormal.IsAlmostEqualTo(XYZ(0, 0, -1)):
-            for loop in face.GetEdgesAsCurveLoops():
-                all_loops.append(loop)
-            break
+#     # 2. Extract the profile loops from the downward-facing bottom face
+#     all_loops = []
+#     for face in master_solid.Faces:
+#         if isinstance(face, PlanarFace) and face.FaceNormal.IsAlmostEqualTo(XYZ(0, 0, -1)):
+#             for loop in face.GetEdgesAsCurveLoops():
+#                 all_loops.append(loop)
+#             break
 
-    if not all_loops:
-        UI.TaskDialog.Show("Error", "No bottom face profile found on the fused wall geometry.")
-        script.exit()
+#     if not all_loops:
+#         UI.TaskDialog.Show("Error", "No bottom face profile found on the fused wall geometry.")
+#         script.exit()
 
-    # Tolerance configuration for downstream sorting engine
-    tol = 0.05
-    def same(p1, p2):
-        return p1.DistanceTo(p2) < tol
+#     # Tolerance configuration for downstream sorting engine
+#     tol = 0.05
+#     def same(p1, p2):
+#         return p1.DistanceTo(p2) < tol
 
-    # ==============================================================================
-    # C. SHAPE DETECTION
-    # ==============================================================================
+#     # ==============================================================================
+#     # C. SHAPE DETECTION
+#     # ==============================================================================
 
-    # Create side lists before determining if wall layout is open or closed
-    lines_side_a = []
-    lines_side_b = []
+#     # Create side lists before determining if wall layout is open or closed
+#     lines_side_a = []
+#     lines_side_b = []
 
-    if len(all_loops) == 1:
-        is_closed_loop_layout = False
-        print("Morphology Identified: Open String. Splitting parallel tracks topologically...")
+#     if len(all_loops) == 1:
+#         is_closed_loop_layout = False
+#         print("Morphology Identified: Open String. Splitting parallel tracks topologically...")
 
-        selected_loop = all_loops[0] 
-        # Convert the CurveLoop container into an iterable list of individual Curve objects
-        loop_curves = [c for c in selected_loop]
+#         selected_loop = all_loops[0] 
+#         # Convert the CurveLoop container into an iterable list of individual Curve objects
+#         loop_curves = [c for c in selected_loop]
     
-        # Find the indices of the end-caps matching the wall thickness
-        cap_indices = []
-        for idx, curve in enumerate(loop_curves):
-            if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
-                cap_indices.append(idx)
+#         # Find the indices of the end-caps matching the wall thickness
+#         cap_indices = []
+#         for idx, curve in enumerate(loop_curves):
+#             if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
+#                 cap_indices.append(idx)
 
-        if len(cap_indices) != 2:
-            UI.TaskDialog.Show("Geometry Error", "Could not identify the two wall end caps.")
-            script.exit()
+#         if len(cap_indices) != 2:
+#             UI.TaskDialog.Show("Geometry Error", "Could not identify the two wall end caps.")
+#             script.exit()
 
-        cap_indices.sort() 
-        idx1 = cap_indices[0]
-        idx2 = cap_indices[1]
+#         cap_indices.sort() 
+#         idx1 = cap_indices[0]
+#         idx2 = cap_indices[1]
 
-        # Extract the two long continuous tracks sitting between the end caps
-        track_1 = loop_curves[idx1 + 1 : idx2]
-        track_2 = loop_curves[idx2 + 1 :] + loop_curves[:idx1]
+#         # Extract the two long continuous tracks sitting between the end caps
+#         track_1 = loop_curves[idx1 + 1 : idx2]
+#         track_2 = loop_curves[idx2 + 1 :] + loop_curves[:idx1]
 
-        # Clean up empty tracks or edge cases
-        lines_side_a = [c for c in track_1 if abs(c.Length - wall_thickness_feet) >= 0.083]
-        lines_side_b = [c for c in track_2 if abs(c.Length - wall_thickness_feet) >= 0.083]
+#         # Clean up empty tracks or edge cases
+#         lines_side_a = [c for c in track_1 if abs(c.Length - wall_thickness_feet) >= 0.083]
+#         lines_side_b = [c for c in track_2 if abs(c.Length - wall_thickness_feet) >= 0.083]
 
-    else: # i.e if closed loop wall  
-        is_closed_loop_layout = True
-        print("Morphology Identified: Closed Loop. Preparing both perimeter loops for user confirmation.")
+#     else: # i.e if closed loop wall  
+#         is_closed_loop_layout = True
+#         print("Morphology Identified: Closed Loop. Preparing both perimeter loops for user confirmation.")
     
-        if len(all_loops) != 2:
-            UI.TaskDialog.Show( 
-                "Geometry Error",
-                "Expected exactly two perimeter loops for a closed wall layout."
-            )
-            script.exit()
+#         if len(all_loops) != 2:
+#             UI.TaskDialog.Show( 
+#                 "Geometry Error",
+#                 "Expected exactly two perimeter loops for a closed wall layout."
+#             )
+#             script.exit()
 
-        lines_side_a = [c for c in all_loops[0]]
-        lines_side_b = [c for c in all_loops[1]]
+#         lines_side_a = [c for c in all_loops[0]]
+#         lines_side_b = [c for c in all_loops[1]]
 
-    if not lines_side_a or not lines_side_b:
-            UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
-            script.exit()
+#     if not lines_side_a or not lines_side_b:
+#             UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
+#             script.exit()
 
-    # ==============================================================================
-    # D. USER CONFIRMATION
-    # ==============================================================================
+#     # ==============================================================================
+#     # D. USER CONFIRMATION
+#     # ==============================================================================
 
-    created_line_ids = []
-    thick_override = OverrideGraphicSettings()
-    thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
-    thick_override.SetProjectionLineWeight(4) # Clean thickness definition
+#     created_line_ids = []
+#     thick_override = OverrideGraphicSettings()
+#     thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
+#     thick_override.SetProjectionLineWeight(4) # Clean thickness definition
 
-    t_draw = Transaction(doc, "Draw Temp Track Highlight")
-    t_draw.Start()
+#     t_draw = Transaction(doc, "Draw Temp Track Highlight")
+#     t_draw.Start()
 
-    for curve in lines_side_a:
-        try:
-            p_start = curve.GetEndPoint(0)
-            p_end = curve.GetEndPoint(1)
-            view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
+#     for curve in lines_side_a:
+#         try:
+#             p_start = curve.GetEndPoint(0)
+#             p_end = curve.GetEndPoint(1)
+#             view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
 
-            d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve)
-            created_line_ids.append(d_line.Id)
+#             d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve)
+#             created_line_ids.append(d_line.Id)
 
-            # Apply the hot pink override parameters directly onto the active view layout
-            doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
-        except Exception:
-            pass
-    t_draw.Commit()
+#             # Apply the hot pink override parameters directly onto the active view layout
+#             doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
+#         except Exception:
+#             pass
+#     t_draw.Commit()
 
-    uidoc.Selection.SetElementIds(List[ElementId]())
-    uidoc.RefreshActiveView()
+#     uidoc.Selection.SetElementIds(List[ElementId]())
+#     uidoc.RefreshActiveView()
 
-    # Pure Programmatic WPF Windows Object Generation
-    panel = Window()
-    panel.Title = "Track Selector"
-    panel.Height = 150
-    panel.Width = 420
-    panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
-    panel.Topmost = True
-    panel.ResizeMode = panel.ResizeMode.NoResize
+#     # Pure Programmatic WPF Windows Object Generation
+#     panel = Window()
+#     panel.Title = "Track Selector"
+#     panel.Height = 150
+#     panel.Width = 420
+#     panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
+#     panel.Topmost = True
+#     panel.ResizeMode = panel.ResizeMode.NoResize
    
-    main_layout = StackPanel()
-    main_layout.Margin = Thickness(15)
+#     main_layout = StackPanel()
+#     main_layout.Margin = Thickness(15)
 
-    txt_lbl = TextBlock()
-    txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
-    txt_lbl.FontWeight = FontWeights.Bold
-    txt_lbl.FontSize = 13
-    txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
-    txt_lbl.Margin = Thickness(0, 0, 0, 15)
-    main_layout.Children.Add(txt_lbl)
+#     txt_lbl = TextBlock()
+#     txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
+#     txt_lbl.FontWeight = FontWeights.Bold
+#     txt_lbl.FontSize = 13
+#     txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
+#     txt_lbl.Margin = Thickness(0, 0, 0, 15)
+#     main_layout.Children.Add(txt_lbl)
  
-    btn_grid = Grid()
-    col1 = ColumnDefinition()
-    col2 = ColumnDefinition()
-    btn_grid.ColumnDefinitions.Add(col1)
-    btn_grid.ColumnDefinitions.Add(col2)
+#     btn_grid = Grid()
+#     col1 = ColumnDefinition()
+#     col2 = ColumnDefinition()
+#     btn_grid.ColumnDefinitions.Add(col1)
+#     btn_grid.ColumnDefinitions.Add(col2)
 
-    state = {"approved": True}
+#     state = {"approved": True}
 
-    def click_yes(sender, e):
-        state["approved"] = True
-        panel.Close()
+#     def click_yes(sender, e):
+#         state["approved"] = True
+#         panel.Close()
 
-    def click_no(sender, e):
-        state["approved"] = False
-        panel.Close()
+#     def click_no(sender, e):
+#         state["approved"] = False
+#         panel.Close()
         
-    btn_yes = Button()
-    btn_yes.Content = "Yes, Use Highlighted Track"
-    btn_yes.Height = 30
-    btn_yes.Margin = Thickness(0, 0, 5, 0)
-    btn_yes.Click += click_yes
-    Grid.SetColumn(btn_yes, 0)
-    btn_grid.Children.Add(btn_yes)
+#     btn_yes = Button()
+#     btn_yes.Content = "Yes, Use Highlighted Track"
+#     btn_yes.Height = 30
+#     btn_yes.Margin = Thickness(0, 0, 5, 0)
+#     btn_yes.Click += click_yes
+#     Grid.SetColumn(btn_yes, 0)
+#     btn_grid.Children.Add(btn_yes)
      
-    btn_no = Button()
-    btn_no.Content = "No, Use Opposite Track"
-    btn_no.Height = 30
-    btn_no.Margin = Thickness(5, 0, 0, 0)
-    btn_no.Click += click_no
-    Grid.SetColumn(btn_no, 1)
-    btn_grid.Children.Add(btn_no)
+#     btn_no = Button()
+#     btn_no.Content = "No, Use Opposite Track"
+#     btn_no.Height = 30
+#     btn_no.Margin = Thickness(5, 0, 0, 0)
+#     btn_no.Click += click_no
+#     Grid.SetColumn(btn_no, 1)
+#     btn_grid.Children.Add(btn_no)
 
-    main_layout.Children.Add(btn_grid)
-    panel.Content = main_layout
-    panel.ShowDialog()
+#     main_layout.Children.Add(btn_grid)
+#     panel.Content = main_layout
+#     panel.ShowDialog()
 
-    user_selection_is_side_a = state["approved"]
+#     user_selection_is_side_a = state["approved"]
 
        
-    t_clean = Transaction(doc, "Clean Temp Highlights")
-    t_clean.Start()
-    for l_id in created_line_ids:
-        try:
-            doc.Delete(l_id)
-        except:
-            pass
-    t_clean.Commit()
-    uidoc.RefreshActiveView()
-
-    # PRINT DIAGNOSTIC
-    print("\n===== USER CONFIRMATION =====")
-    print("User selected Side A :", user_selection_is_side_a)
-
-    print("\n===== PART C / D DIAGNOSTIC =====")
-    print("Closed loop layout :", is_closed_loop_layout)
-    print("Number of loops    :", len(all_loops))
-    print("Side A curve count :", len(lines_side_a))
-    print("Side B curve count :", len(lines_side_b))
-    print("Selected side      :", "A" if user_selection_is_side_a else "B")
-    print("\n--- SIDE A ---")
-    for i, curve in enumerate(lines_side_a):
-        start = curve.GetEndPoint(0)
-        end = curve.GetEndPoint(1)
-
-        print(
-            "Curve {}: ({:.1f}, {:.1f}) -> ({:.1f}, {:.1f})".format(
-                i,
-                start.X * 304.8,
-                start.Y * 304.8,
-                end.X * 304.8,
-                end.Y * 304.8
-            )
-        )
-
-    print("\n--- SIDE B ---")
-    for i, curve in enumerate(lines_side_b):
-        start = curve.GetEndPoint(0)
-        end = curve.GetEndPoint(1)
-
-        print(
-            "Curve {}: ({:.1f}, {:.1f}) -> ({:.1f}, {:.1f})".format(
-                i,
-                start.X * 304.8,
-                start.Y * 304.8,
-                end.X * 304.8,
-                end.Y * 304.8
-            )
-        )
-
-    # ==============================================================================
-    # E. SORTING
-    # ==============================================================================
-
-    # At this point:
-    #
-    # lines_side_a and lines_side_b contain the two possible wall face tracks.
-    # This is true for both open wall runs and closed loop layouts.
-    #
-    # user_selection_is_side_a stores the user's confirmation from Part D:
-    # True  = use Side A as the exterior face
-    # False = use Side B as the exterior face
-    #
-    # Part E now packages and sorts only the user-selected side.
-
-
-    # For each boundary curve, identify the closest original Wall element and
-    # package it together with the curve's start and end XYZ points.
-
-    def package_track(curves_list):
-        packaged = []
-
-        for c in curves_list:
-            p_start = c.GetEndPoint(0)
-            p_end = c.GetEndPoint(1)
-            mid_point = c.Evaluate(0.5, True)
-
-            matched_wall = None
-            closest_dist = float('inf')
-
-            for w in walls:
-                if isinstance(w.Location, LocationCurve):
-                    dist = w.Location.Curve.Distance(mid_point)
-
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        matched_wall = w
-
-            packaged.append({
-                "Wall": matched_wall,
-                "Start": p_start,
-                "End": p_end
-            })
-
-        return packaged
-
-
-    if user_selection_is_side_a:
-        raw_side = package_track(lines_side_a)
-    else:
-        raw_side = package_track(lines_side_b)
+#     t_clean = Transaction(doc, "Clean Temp Highlights")
+#     t_clean.Start()
+#     for l_id in created_line_ids:
+#         try:
+#             doc.Delete(l_id)
+#         except:
+#             pass
+#     t_clean.Commit()
+#     uidoc.RefreshActiveView()
+
+#     # PRINT DIAGNOSTIC
+#     print("\n===== USER CONFIRMATION =====")
+#     print("User selected Side A :", user_selection_is_side_a)
+
+#     print("\n===== PART C / D DIAGNOSTIC =====")
+#     print("Closed loop layout :", is_closed_loop_layout)
+#     print("Number of loops    :", len(all_loops))
+#     print("Side A curve count :", len(lines_side_a))
+#     print("Side B curve count :", len(lines_side_b))
+#     print("Selected side      :", "A" if user_selection_is_side_a else "B")
+#     print("\n--- SIDE A ---")
+#     for i, curve in enumerate(lines_side_a):
+#         start = curve.GetEndPoint(0)
+#         end = curve.GetEndPoint(1)
+
+#         print(
+#             "Curve {}: ({:.1f}, {:.1f}) -> ({:.1f}, {:.1f})".format(
+#                 i,
+#                 start.X * 304.8,
+#                 start.Y * 304.8,
+#                 end.X * 304.8,
+#                 end.Y * 304.8
+#             )
+#         )
+
+#     print("\n--- SIDE B ---")
+#     for i, curve in enumerate(lines_side_b):
+#         start = curve.GetEndPoint(0)
+#         end = curve.GetEndPoint(1)
+
+#         print(
+#             "Curve {}: ({:.1f}, {:.1f}) -> ({:.1f}, {:.1f})".format(
+#                 i,
+#                 start.X * 304.8,
+#                 start.Y * 304.8,
+#                 end.X * 304.8,
+#                 end.Y * 304.8
+#             )
+#         )
+
+#     # ==============================================================================
+#     # E. SORTING
+#     # ==============================================================================
+
+#     # At this point:
+#     #
+#     # lines_side_a and lines_side_b contain the two possible wall face tracks.
+#     # This is true for both open wall runs and closed loop layouts.
+#     #
+#     # user_selection_is_side_a stores the user's confirmation from Part D:
+#     # True  = use Side A as the exterior face
+#     # False = use Side B as the exterior face
+#     #
+#     # Part E now packages and sorts only the user-selected side.
+
+
+#     # For each boundary curve, identify the closest original Wall element and
+#     # package it together with the curve's start and end XYZ points.
+
+#     def package_track(curves_list):
+#         packaged = []
+
+#         for c in curves_list:
+#             p_start = c.GetEndPoint(0)
+#             p_end = c.GetEndPoint(1)
+#             mid_point = c.Evaluate(0.5, True)
+
+#             matched_wall = None
+#             closest_dist = float('inf')
+
+#             for w in walls:
+#                 if isinstance(w.Location, LocationCurve):
+#                     dist = w.Location.Curve.Distance(mid_point)
+
+#                     if dist < closest_dist:
+#                         closest_dist = dist
+#                         matched_wall = w
+
+#             packaged.append({
+#                 "Wall": matched_wall,
+#                 "Start": p_start,
+#                 "End": p_end
+#             })
+
+#         return packaged
+
+
+#     if user_selection_is_side_a:
+#         raw_side = package_track(lines_side_a)
+#     else:
+#         raw_side = package_track(lines_side_b)
 
 
-    def sort_packaged_track(raw_edges_list):
+#     def sort_packaged_track(raw_edges_list):
 
-        if not raw_edges_list:
-            return []
+#         if not raw_edges_list:
+#             return []
 
-        unused = raw_edges_list[:]
+#         unused = raw_edges_list[:]
 
-        current = unused.pop(0)
-        ordered_list = [current]
-        current_point = current["End"]
+#         current = unused.pop(0)
+#         ordered_list = [current]
+#         current_point = current["End"]
 
-        while unused:
-            found = False
+#         while unused:
+#             found = False
 
-            for i, edge in enumerate(unused):
-                s = edge["Start"]
-                e = edge["End"]
-                w = edge["Wall"]
+#             for i, edge in enumerate(unused):
+#                 s = edge["Start"]
+#                 e = edge["End"]
+#                 w = edge["Wall"]
 
-                if same(s, current_point):
-                    ordered_list.append({
-                        "Wall": w,
-                        "Start": s,
-                        "End": e
-                    })
+#                 if same(s, current_point):
+#                     ordered_list.append({
+#                         "Wall": w,
+#                         "Start": s,
+#                         "End": e
+#                     })
 
-                    current_point = e
-                    unused.pop(i)
-                    found = True
-                    break
+#                     current_point = e
+#                     unused.pop(i)
+#                     found = True
+#                     break
 
-                elif same(e, current_point):
-                    ordered_list.append({
-                        "Wall": w,
-                        "Start": e,
-                        "End": s
-                    })
+#                 elif same(e, current_point):
+#                     ordered_list.append({
+#                         "Wall": w,
+#                         "Start": e,
+#                         "End": s
+#                     })
 
-                    current_point = s
-                    unused.pop(i)
-                    found = True
-                    break
+#                     current_point = s
+#                     unused.pop(i)
+#                     found = True
+#                     break
 
-            if not found:
-                break
+#             if not found:
+#                 break
 
-        # Temporary fallback:
-        # append any segments that could not be connected.
-        if unused:
-            for remaining in unused:
-                ordered_list.append(remaining)
+#         # Temporary fallback:
+#         # append any segments that could not be connected.
+#         if unused:
+#             for remaining in unused:
+#                 ordered_list.append(remaining)
 
-        return ordered_list
+#         return ordered_list
 
 
-    sorted_side = sort_packaged_track(raw_side)
+#     sorted_side = sort_packaged_track(raw_side)
 
-    ordered_data = sorted_side
+#     ordered_data = sorted_side
 
-    ordered = [
-        (item["Start"], item["End"])
-        for item in ordered_data
-    ]
+#     ordered = [
+#         (item["Start"], item["End"])
+#         for item in ordered_data
+#     ]
 
 
-    # PRINT DIAGNOSTIC
+#     # PRINT DIAGNOSTIC
 
-    print("\n===== SORTED TRACK =====")
+#     print("\n===== SORTED TRACK =====")
 
-    for i, edge in enumerate(ordered_data):
+#     for i, edge in enumerate(ordered_data):
 
-        wall = edge["Wall"]
-        start = edge["Start"]
-        end = edge["End"]
+#         wall = edge["Wall"]
+#         start = edge["Start"]
+#         end = edge["End"]
 
-        print("\nEdge {}".format(i))
-        print("Element ID :", wall.Id)
-        print("Flipped    :", wall.Flipped)
-        print(
-            "Start      : ({:.1f}, {:.1f})".format(
-                start.X * 304.8,
-                start.Y * 304.8
-            )
-        )
-        print(
-            "End        : ({:.1f}, {:.1f})".format(
-                end.X * 304.8,
-                end.Y * 304.8
-            )
-        )
+#         print("\nEdge {}".format(i))
+#         print("Element ID :", wall.Id)
+#         print("Flipped    :", wall.Flipped)
+#         print(
+#             "Start      : ({:.1f}, {:.1f})".format(
+#                 start.X * 304.8,
+#                 start.Y * 304.8
+#             )
+#         )
+#         print(
+#             "End        : ({:.1f}, {:.1f})".format(
+#                 end.X * 304.8,
+#                 end.Y * 304.8
+#             )
+#         )
 
 
-    print("\n===== OUTSIDE SIDE TEST =====")
+#     print("\n===== OUTSIDE SIDE TEST =====")
 
-    print("User selected Side A :", user_selection_is_side_a)
-    print("Testing selected exterior track only")
+#     print("User selected Side A :", user_selection_is_side_a)
+#     print("Testing selected exterior track only")
 
-    half_thickness_feet = wall_thickness_feet / 2.0
+#     half_thickness_feet = wall_thickness_feet / 2.0
 
-    for i, edge in enumerate(ordered_data):
+#     for i, edge in enumerate(ordered_data):
 
-        wall = edge["Wall"]
-        start = edge["Start"]
-        end = edge["End"]
+#         wall = edge["Wall"]
+#         start = edge["Start"]
+#         end = edge["End"]
 
-        track_dir = (end - start).Normalize()
+#         track_dir = (end - start).Normalize()
 
-        left_vec = XYZ(
-            -track_dir.Y,
-            track_dir.X,
-            0.0
-        )
+#         left_vec = XYZ(
+#             -track_dir.Y,
+#             track_dir.X,
+#             0.0
+#         )
 
-        right_vec = -left_vec
+#         right_vec = -left_vec
 
-        mid = XYZ(
-            (start.X + end.X) / 2.0,
-            (start.Y + end.Y) / 2.0,
-            (start.Z + end.Z) / 2.0
-        )
+#         mid = XYZ(
+#             (start.X + end.X) / 2.0,
+#             (start.Y + end.Y) / 2.0,
+#             (start.Z + end.Z) / 2.0
+#         )
 
-        test_left = mid + (
-            left_vec * half_thickness_feet
-        )
+#         test_left = mid + (
+#             left_vec * half_thickness_feet
+#         )
 
-        test_right = mid + (
-            right_vec * half_thickness_feet
-        )
+#         test_right = mid + (
+#             right_vec * half_thickness_feet
+#         )
 
-        dist_left = wall.Location.Curve.Distance(
-            test_left
-        )
+#         dist_left = wall.Location.Curve.Distance(
+#             test_left
+#         )
 
-        dist_right = wall.Location.Curve.Distance(
-            test_right
-        )
+#         dist_right = wall.Location.Curve.Distance(
+#             test_right
+#         )
 
-        print("\nEdge {}".format(i))
-        print("Wall flipped :", wall.Flipped)
+#         print("\nEdge {}".format(i))
+#         print("Wall flipped :", wall.Flipped)
 
-        print(
-            "Left test distance to wall centreline  : {:.4f}".format(
-                dist_left
-            )
-        )
+#         print(
+#             "Left test distance to wall centreline  : {:.4f}".format(
+#                 dist_left
+#             )
+#         )
 
-        print(
-            "Right test distance to wall centreline : {:.4f}".format(
-                dist_right
-            )
-        )
+#         print(
+#             "Right test distance to wall centreline : {:.4f}".format(
+#                 dist_right
+#             )
+#         )
 
-        if dist_left < dist_right:
-            print(
-                "Wall core is on LEFT of selected track"
-            )
-            print(
-                "Therefore OUTSIDE is on RIGHT"
-            )
+#         if dist_left < dist_right:
+#             print(
+#                 "Wall core is on LEFT of selected track"
+#             )
+#             print(
+#                 "Therefore OUTSIDE is on RIGHT"
+#             )
 
-        else:
-            print(
-                "Wall core is on RIGHT of selected track"
-            )
-            print(
-                "Therefore OUTSIDE is on LEFT"
-            )
+#         else:
+#             print(
+#                 "Wall core is on RIGHT of selected track"
+#             )
+#             print(
+#                 "Therefore OUTSIDE is on LEFT"
+#             )
 
 
-    # ==============================================================================
-    # F. AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITION ASSIGNMENT
-    # =================================================================================
+#     # ==============================================================================
+#     # F. AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITION ASSIGNMENT
+#     # =================================================================================
 
-    num_edges = len(ordered)
-    EDGES = []
+#     num_edges = len(ordered)
+#     EDGES = []
 
-    first_point = ordered[0][0]
-    last_point = ordered[-1][1]
-    is_closed_loop_layout = same(first_point, last_point) 
+#     first_point = ordered[0][0]
+#     last_point = ordered[-1][1]
+#     is_closed_loop_layout = same(first_point, last_point) 
     
-    # TODO - Review whether this closed-loop check is still required.
-    # The layout type was already determined in Section C and has not changed.
-    # Consider reusing the existing is_closed_loop_layout value.
+#     # TODO - Review whether this closed-loop check is still required.
+#     # The layout type was already determined in Section C and has not changed.
+#     # Consider reusing the existing is_closed_loop_layout value.
 
 
-    def cross_product_z(p1, p2, p3):
-        v1_x = p2.X - p1.X
-        v1_y = p2.Y - p1.Y
-        v2_x = p3.X - p2.X
-        v2_y = p3.Y - p2.Y
-        return (v1_x * v2_y) - (v1_y * v2_x)
+#     def cross_product_z(p1, p2, p3):
+#         v1_x = p2.X - p1.X
+#         v1_y = p2.Y - p1.Y
+#         v2_x = p3.X - p2.X
+#         v2_y = p3.Y - p2.Y
+#         return (v1_x * v2_y) - (v1_y * v2_x)
     
-    for i in range(num_edges):
-        edge_curr = ordered[i]
-        pt_start = edge_curr[0]
-        pt_end = edge_curr[1]
+#     for i in range(num_edges):
+#         edge_curr = ordered[i]
+#         pt_start = edge_curr[0]
+#         pt_end = edge_curr[1]
 
-        dx_mm = (pt_end.X - pt_start.X) * 304.8
-        dy_mm = (pt_end.Y - pt_start.Y) * 304.8
-        length_mm = math.sqrt(dx_mm**2 + dy_mm**2)
+#         dx_mm = (pt_end.X - pt_start.X) * 304.8
+#         dy_mm = (pt_end.Y - pt_start.Y) * 304.8
+#         length_mm = math.sqrt(dx_mm**2 + dy_mm**2)
         
-        # TODO - Consider storing curve length during package_track().
+#         # TODO - Consider storing curve length during package_track().
         
-        # START CONDITION
-        if i == 0 and not is_closed_loop_layout:
-            start_is_external = False 
-            start_is_open = True
-        else: # CLOSED LOOP
-            edge_prev = ordered[(i - 1) % num_edges] 
-            cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
-            # The selected exterior track has outside on its LEFT.
-            # Therefore a RIGHT turn indicates an external corner.
-            start_is_external = cp_start_z < 0 
-            start_is_open = False
+#         # START CONDITION
+#         if i == 0 and not is_closed_loop_layout:
+#             start_is_external = False 
+#             start_is_open = True
+#         else: # CLOSED LOOP
+#             edge_prev = ordered[(i - 1) % num_edges] 
+#             cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
+#             # The selected exterior track has outside on its LEFT.
+#             # Therefore a RIGHT turn indicates an external corner.
+#             start_is_external = cp_start_z < 0 
+#             start_is_open = False
 
-        # END CONDITION
-        if i == num_edges - 1 and not is_closed_loop_layout:
-            end_is_external = False
-            end_is_open = True
-        else: # CLOSED LOOP
-            edge_next = ordered[(i + 1) % num_edges]
-            cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
-            # The selected exterior track has outside on its LEFT.
-            # Therefore a RIGHT turn indicates an external corner.
-            end_is_external = cp_end_z < 0
-            end_is_open = False
+#         # END CONDITION
+#         if i == num_edges - 1 and not is_closed_loop_layout:
+#             end_is_external = False
+#             end_is_open = True
+#         else: # CLOSED LOOP
+#             edge_next = ordered[(i + 1) % num_edges]
+#             cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
+#             # The selected exterior track has outside on its LEFT.
+#             # Therefore a RIGHT turn indicates an external corner.
+#             end_is_external = cp_end_z < 0
+#             end_is_open = False
 
-        if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
-            if num_edges == 1: brick_condition = "Co-" 
-            elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
-            else: brick_condition = "Co-" if start_is_external else "Co"
-        else:
-            if start_is_external and end_is_external: brick_condition = "Co-"   
-            elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
-            else: brick_condition = "Co+"   
+#         if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
+#             if num_edges == 1: brick_condition = "Co-" 
+#             elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
+#             else: brick_condition = "Co-" if start_is_external else "Co"
+#         else:
+#             if start_is_external and end_is_external: brick_condition = "Co-"   
+#             elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
+#             else: brick_condition = "Co+"   
 
-        wall_info = {
-            "Wall Object": ordered_data[i]["Wall"], # Injects physical wall object reference safely into data map
-            "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
-                            (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
-            "Length": length_mm,
-            "Condition": brick_condition
-        }
-        EDGES.append(wall_info)
+#         wall_info = {
+#             "Wall Object": ordered_data[i]["Wall"], # Injects physical wall object reference safely into data map
+#             "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
+#                             (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
+#             "Length": length_mm,
+#             "Condition": brick_condition
+#         }
+#         EDGES.append(wall_info)
 
-    # ==============================================================================
-    # G. RESIZE LENGTH 
-    # ==============================================================================
-    def resize(length, condition):
-        if condition == "Co-": grid_length = length + 10
-        elif condition == "Co+": grid_length = length - 10
-        else: grid_length = length
+#     # ==============================================================================
+#     # G. RESIZE LENGTH 
+#     # ==============================================================================
+#     def resize(length, condition):
+#         if condition == "Co-": grid_length = length + 10
+#         elif condition == "Co+": grid_length = length - 10
+#         else: grid_length = length
 
-        half_brick_units = round(grid_length / 112.5) 
+#         half_brick_units = round(grid_length / 112.5) 
 
-        if condition == "Co-": return (half_brick_units * 112.5 - 10)
-        if condition == "Co+": return (half_brick_units * 112.5 + 10)
-        if condition == "Co": return (half_brick_units * 112.5)
+#         if condition == "Co-": return (half_brick_units * 112.5 - 10)
+#         if condition == "Co+": return (half_brick_units * 112.5 + 10)
+#         if condition == "Co": return (half_brick_units * 112.5)
 
-    EDGES_copy = []
-    for edge in EDGES:
-        EDGES_copy.append({
-            "Wall Object": edge["Wall Object"],
-            "Points List": list(edge["Points List"]),
-            "Length": edge["Length"],
-            "Condition": edge["Condition"]
-        })
+#     EDGES_copy = []
+#     for edge in EDGES:
+#         EDGES_copy.append({
+#             "Wall Object": edge["Wall Object"],
+#             "Points List": list(edge["Points List"]),
+#             "Length": edge["Length"],
+#             "Condition": edge["Condition"]
+#         })
 
-    # Resize leading segment (Segment 0)
-    EDGES_copy[0]["Length"] = resize(EDGES[0]["Length"], EDGES[0]["Condition"])
-    start_pt = EDGES_copy[0]["Points List"][0] 
-    end_pt = EDGES[0]["Points List"][1] 
-    dx = end_pt[0] - start_pt[0] 
-    dy = end_pt[1] - start_pt[1] 
+#     # Resize leading segment (Segment 0)
+#     EDGES_copy[0]["Length"] = resize(EDGES[0]["Length"], EDGES[0]["Condition"])
+#     start_pt = EDGES_copy[0]["Points List"][0] 
+#     end_pt = EDGES[0]["Points List"][1] 
+#     dx = end_pt[0] - start_pt[0] 
+#     dy = end_pt[1] - start_pt[1] 
 
-    if abs(dx) > abs(dy):
-        direction = 1.0 if dx > 0 else -1.0
-        new_end_x = start_pt[0] + (EDGES_copy[0]["Length"] * direction)
-        EDGES_copy[0]["Points List"][1] = (new_end_x, start_pt[1], start_pt[2])
-    else:
-        direction = 1.0 if dy > 0 else -1.0
-        new_end_y = start_pt[1] + (EDGES_copy[0]["Length"] * direction)
-        EDGES_copy[0]["Points List"][1] = (start_pt[0], new_end_y, start_pt[2])
+#     if abs(dx) > abs(dy):
+#         direction = 1.0 if dx > 0 else -1.0
+#         new_end_x = start_pt[0] + (EDGES_copy[0]["Length"] * direction)
+#         EDGES_copy[0]["Points List"][1] = (new_end_x, start_pt[1], start_pt[2])
+#     else:
+#         direction = 1.0 if dy > 0 else -1.0
+#         new_end_y = start_pt[1] + (EDGES_copy[0]["Length"] * direction)
+#         EDGES_copy[0]["Points List"][1] = (start_pt[0], new_end_y, start_pt[2])
 
-    prev_end_pt = EDGES_copy[0]["Points List"][1]
+#     prev_end_pt = EDGES_copy[0]["Points List"][1]
 
-    # Sequential array projection loop
-    for i in range(1, len(EDGES_copy)):
-        EDGES_copy[i]["Points List"][0] = prev_end_pt
-        EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"])
-        orig_start = EDGES[i]["Points List"][0]
-        orig_end = EDGES[i]["Points List"][1]
-        dx = orig_end[0] - orig_start[0]
-        dy = orig_end[1] - orig_start[1]
+#     # Sequential array projection loop
+#     for i in range(1, len(EDGES_copy)):
+#         EDGES_copy[i]["Points List"][0] = prev_end_pt
+#         EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"])
+#         orig_start = EDGES[i]["Points List"][0]
+#         orig_end = EDGES[i]["Points List"][1]
+#         dx = orig_end[0] - orig_start[0]
+#         dy = orig_end[1] - orig_start[1]
 
-        if abs(dx) > abs(dy):
-            direction = 1.0 if dx > 0 else -1.0
-            new_end_x = EDGES_copy[i]["Points List"][0][0] + (EDGES_copy[i]["Length"] * direction)
-            EDGES_copy[i]["Points List"][1] = (new_end_x, EDGES_copy[i]["Points List"][0][1], EDGES_copy[i]["Points List"][0][2])
-        else:
-            direction = 1.0 if dy > 0 else -1.0
-            new_end_y = EDGES_copy[i]["Points List"][0][1] + (EDGES_copy[i]["Length"] * direction)
-            EDGES_copy[i]["Points List"][1] = (EDGES_copy[i]["Points List"][0][0], new_end_y, EDGES_copy[i]["Points List"][0][2])
+#         if abs(dx) > abs(dy):
+#             direction = 1.0 if dx > 0 else -1.0
+#             new_end_x = EDGES_copy[i]["Points List"][0][0] + (EDGES_copy[i]["Length"] * direction)
+#             EDGES_copy[i]["Points List"][1] = (new_end_x, EDGES_copy[i]["Points List"][0][1], EDGES_copy[i]["Points List"][0][2])
+#         else:
+#             direction = 1.0 if dy > 0 else -1.0
+#             new_end_y = EDGES_copy[i]["Points List"][0][1] + (EDGES_copy[i]["Length"] * direction)
+#             EDGES_copy[i]["Points List"][1] = (EDGES_copy[i]["Points List"][0][0], new_end_y, EDGES_copy[i]["Points List"][0][2])
 
-        prev_end_pt = EDGES_copy[i]["Points List"][1]
+#         prev_end_pt = EDGES_copy[i]["Points List"][1]
 
-    # ==============================================================================
-    # FINAL PRINT REPORT
-    # ==============================================================================
-    print("\n--- BRICK COORDINATOR PROCESSED OUTPUT ---")
-    for idx in range(len(EDGES)):
-        print("Wall Segment [{}]:".format(idx))
-        print("  -> Original Length : {:.1f}mm".format(EDGES[idx]["Length"]))
-        print("  -> Corner Condition: {}".format(EDGES[idx]["Condition"]))
-        print("  -> Target Brick Dim: {:.1f}mm".format(EDGES_copy[idx]["Length"]))
+#     # ==============================================================================
+#     # FINAL PRINT REPORT
+#     # ==============================================================================
+#     print("\n--- BRICK COORDINATOR PROCESSED OUTPUT ---")
+#     for idx in range(len(EDGES)):
+#         print("Wall Segment [{}]:".format(idx))
+#         print("  -> Original Length : {:.1f}mm".format(EDGES[idx]["Length"]))
+#         print("  -> Corner Condition: {}".format(EDGES[idx]["Condition"]))
+#         print("  -> Target Brick Dim: {:.1f}mm".format(EDGES_copy[idx]["Length"]))
 
-    # ==============================================================================
-    # H: AUTOMATIC PHYSICAL MODEL REPOSITIONING (NON-FLIP ENGINE)
-    # ==============================================================================
-    # Open a database transaction to push changes into the active Revit document
-    t_move = Transaction(doc, "Reposition and Co-ordinate Walls")
-    t_move.Start()
+#     # ==============================================================================
+#     # H: AUTOMATIC PHYSICAL MODEL REPOSITIONING (NON-FLIP ENGINE)
+#     # ==============================================================================
+#     # Open a database transaction to push changes into the active Revit document
+#     t_move = Transaction(doc, "Reposition and Co-ordinate Walls")
+#     t_move.Start()
 
-    try:
-        # STEP 1: Temporarily disallow joins on all walls before repositioning
-        for edge_data in EDGES_copy:
-            wall = edge_data["Wall Object"]
+#     try:
+#         # STEP 1: Temporarily disallow joins on all walls before repositioning
+#         for edge_data in EDGES_copy:
+#             wall = edge_data["Wall Object"]
 
-            if wall is not None:
-                WallUtils.DisallowWallJoinAtEnd(wall, 0)
-                WallUtils.DisallowWallJoinAtEnd(wall, 1)
+#             if wall is not None:
+#                 WallUtils.DisallowWallJoinAtEnd(wall, 0)
+#                 WallUtils.DisallowWallJoinAtEnd(wall, 1)
 
-        # STEP 2: Reposition each wall
-        for edge_data in EDGES_copy:
-            wall = edge_data["Wall Object"]
+#         # STEP 2: Reposition each wall
+#         for edge_data in EDGES_copy:
+#             wall = edge_data["Wall Object"]
                 
-            if wall is None:
-                    continue
+#             if wall is None:
+#                     continue
 
-            wall_loc = wall.Location
+#             wall_loc = wall.Location
 
-            if not isinstance(wall_loc, LocationCurve):
-                continue
+#             if not isinstance(wall_loc, LocationCurve):
+#                 continue
 
-            # 1. Pull the newly calculated exterior brick target coordinates from Phase 5
-            # Explicitly isolate the start node [0] and end node [1] from the sequence
-            start_mm = edge_data["Points List"][0]
-            end_mm = edge_data["Points List"][1]
+#             # 1. Pull the newly calculated exterior brick target coordinates from Phase 5
+#             # Explicitly isolate the start node [0] and end node [1] from the sequence
+#             start_mm = edge_data["Points List"][0]
+#             end_mm = edge_data["Points List"][1]
 
-            # 2. Convert exterior metric coordinate values back into native Revit Imperial Feet
-            pt_start_track = XYZ(
-                start_mm[0] / 304.8,
-                start_mm[1] / 304.8,
-                start_mm[2] / 304.8
-            )
+#             # 2. Convert exterior metric coordinate values back into native Revit Imperial Feet
+#             pt_start_track = XYZ(
+#                 start_mm[0] / 304.8,
+#                 start_mm[1] / 304.8,
+#                 start_mm[2] / 304.8
+#             )
 
-            pt_end_track = XYZ(
-                end_mm[0] / 304.8,
-                end_mm[1] / 304.8,
-                end_mm[2] / 304.8
-            )
+#             pt_end_track = XYZ(
+#                 end_mm[0] / 304.8,
+#                 end_mm[1] / 304.8,
+#                 end_mm[2] / 304.8
+#             )
 
-            # 3. Compute the 2D direction vector of this wall segment
-            track_dir = (pt_end_track - pt_start_track).Normalize()
+#             # 3. Compute the 2D direction vector of this wall segment
+#             track_dir = (pt_end_track - pt_start_track).Normalize()
 
-            # 4. Generate a perpendicular normal vector 
-            perpend_vector = XYZ(
-                -track_dir.Y,
-                track_dir.X,
-                0.0
-            )
+#             # 4. Generate a perpendicular normal vector 
+#             perpend_vector = XYZ(
+#                 -track_dir.Y,
+#                 track_dir.X,
+#                 0.0
+#             )
 
-            # 5. Calculate half the wall thickness to find the centerline shift distance
-            half_thickness_feet = wall.WallType.Width / 2.0
+#             # 5. Calculate half the wall thickness to find the centerline shift distance
+#             half_thickness_feet = wall.WallType.Width / 2.0
 
-            # 6. DYNAMIC TEST: Compare both possible centreline positions
-            test_pt_positive = (
-                pt_start_track
-                + perpend_vector * half_thickness_feet
-            )
+#             # 6. DYNAMIC TEST: Compare both possible centreline positions
+#             test_pt_positive = (
+#                 pt_start_track
+#                 + perpend_vector * half_thickness_feet
+#             )
 
-            test_pt_negative = (
-                pt_start_track
-                - perpend_vector * half_thickness_feet
-            )
+#             test_pt_negative = (
+#                 pt_start_track
+#                 - perpend_vector * half_thickness_feet
+#             )
 
-            dist_pos = wall_loc.Curve.Distance(test_pt_positive)
-            dist_neg = wall_loc.Curve.Distance(test_pt_negative)
+#             dist_pos = wall_loc.Curve.Distance(test_pt_positive)
+#             dist_neg = wall_loc.Curve.Distance(test_pt_negative)
 
-            if dist_pos < dist_neg:
-                correct_shift_vector = (
-                    perpend_vector * half_thickness_feet
-                )
-            else:
-                correct_shift_vector = (
-                    -perpend_vector * half_thickness_feet
-                )
+#             if dist_pos < dist_neg:
+#                 correct_shift_vector = (
+#                     perpend_vector * half_thickness_feet
+#                 )
+#             else:
+#                 correct_shift_vector = (
+#                     -perpend_vector * half_thickness_feet
+#                 )
 
-            # 7. Shift the exterior target points using the verified offset vector
-            pt_start_center = pt_start_track + correct_shift_vector
-            pt_end_center = pt_end_track + correct_shift_vector
+#             # 7. Shift the exterior target points using the verified offset vector
+#             pt_start_center = pt_start_track + correct_shift_vector
+#             pt_end_center = pt_end_track + correct_shift_vector
 
-            # 8. Build the new bounded line geometry along the centerline axis
-            new_line = Line.CreateBound(pt_start_center, pt_end_center)
+#             # 8. Build the new bounded line geometry along the centerline axis
+#             new_line = Line.CreateBound(pt_start_center, pt_end_center)
 
-            # 9. Force the Wall location parameter reference back to Wall Centerline (Value 0)
-            loc_param = wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM)
+#             # 9. Force the Wall location parameter reference back to Wall Centerline (Value 0)
+#             loc_param = wall.get_Parameter(BuiltInParameter.WALL_KEY_REF_PARAM)
             
-            if loc_param and not loc_param.IsReadOnly:
-                loc_param.Set(0) 
+#             if loc_param and not loc_param.IsReadOnly:
+#                 loc_param.Set(0) 
 
-            if wall.Flipped:
-                    wall.Flip()    
+#             if wall.Flipped:
+#                     wall.Flip()    
 
-            # 10. Overwrite the location line curve property to snap the wall cleanly into place
-            wall_loc.Curve = new_line
+#             # 10. Overwrite the location line curve property to snap the wall cleanly into place
+#             wall_loc.Curve = new_line
 
-        # STEP 3: Restore joins after all walls have been repositioned
-        for edge_data in EDGES_copy:
-            wall = edge_data["Wall Object"]
+#         # STEP 3: Restore joins after all walls have been repositioned
+#         for edge_data in EDGES_copy:
+#             wall = edge_data["Wall Object"]
 
-            if wall is not None:
-                WallUtils.AllowWallJoinAtEnd(wall, 0)
-                WallUtils.AllowWallJoinAtEnd(wall, 1)
+#             if wall is not None:
+#                 WallUtils.AllowWallJoinAtEnd(wall, 0)
+#                 WallUtils.AllowWallJoinAtEnd(wall, 1)
 
-        t_move.Commit()
+#         t_move.Commit()
 
-        print("\n[SUCCESS]: Physical walls have been automatically adjusted to match brick dimensions.")
-        uidoc.RefreshActiveView()
+#         print("\n[SUCCESS]: Physical walls have been automatically adjusted to match brick dimensions.")
+#         uidoc.RefreshActiveView()
 
-    except Exception as e:
-        t_move.RollBack()
-        UI.TaskDialog.Show("Execution Error", "Failed to reposition structural walls: {}".format(str(e)))
+#     except Exception as e:
+#         t_move.RollBack()
+#         UI.TaskDialog.Show("Execution Error", "Failed to reposition structural walls: {}".format(str(e)))
