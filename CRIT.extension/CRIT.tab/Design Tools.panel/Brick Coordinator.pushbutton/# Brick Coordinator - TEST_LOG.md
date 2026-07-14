@@ -2,42 +2,41 @@
 
 ---
 
-# Commit 010
+# Commit 011
 
 ---
 
 ## Git Commit #
 
-010
+011
 
 ---
 
 ## Commit Message
 
-Unify flipped and non-flipped wall processing into shared engine
+Consolidate flipped and non-flipped engines into shared Brick Coordinator engine
 
 ---
 
 ## Change Made
 
-Refactored the Brick Coordinator to execute a single shared processing engine.
+Completed the consolidation of the previously duplicated flipped and non-flipped processing engines into a single shared execution path.
 
 Changes include:
 
-Replaced the router condition with a temporary:
-
-if True:
-
-so that the former flipped engine is always executed.
-
-- Disabled the duplicated non-flipped engine by commenting it out.
-- Left Parts B–H completely unchanged.
+- Removed the obsolete flipped_count calculation.
+- Removed the temporary router experiment (if True:).
+- Removed the router branching between flipped and non-flipped engines.
+- Promoted the shared processing code to become the single Brick Coordinator Engine.
+- Deleted the duplicated non-flipped engine, reducing the script size by approximately half.
 - Retained the existing conditional wall orientation handling in Part H:
 
 if wall.Flipped:
     wall.Flip()
 
-which now provides the only remaining behavioural distinction between flipped and non-flipped walls.
+which now provides the only remaining executable distinction between flipped and non-flipped walls.
+
+No changes were made to the executable logic within Parts B–H.
 
 ---
 
@@ -45,11 +44,11 @@ which now provides the only remaining behavioural distinction between flipped an
 
 Previous refactoring work had made Parts B–H of the flipped and non-flipped engines functionally identical.
 
-The only remaining executable difference between the two branches was the router itself.
+A temporary experiment demonstrated that the former flipped engine could successfully process every standard flipped and non-flipped wall configuration without requiring separate execution paths.
 
-This experiment was performed to verify that the former flipped engine could successfully process both flipped and non-flipped wall layouts without requiring separate execution paths.
+Following successful regression testing, the obsolete router and duplicated non-flipped engine were removed, leaving a single shared workflow responsible for all wall processing.
 
-The successful result demonstrates that the duplicated non-flipped engine is no longer required and that a single shared workflow can support all currently tested wall configurations.
+This significantly simplifies the overall architecture while preserving the existing proven behaviour.
 
 ---
 
@@ -116,11 +115,11 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The former flipped engine has been successfully verified as a shared processing engine.
+The Brick Coordinator now executes a single shared processing engine for both flipped and non-flipped wall layouts.
 
-All six standard regression scenarios executed successfully using a single executable workflow.
+All six standard regression scenarios completed successfully following removal of the router and duplicated non-flipped engine.
 
-This confirms that the router no longer performs any meaningful behavioural selection and that all geometry extraction, shape detection, sorting, corner classification, resizing and wall repositioning logic can now be executed through one shared algorithm.
+This confirms that geometry extraction, shape detection, user confirmation, sorting, corner classification, resizing and wall repositioning can all be executed through a single shared workflow.
 
 The only remaining executable distinction between individual walls is the conditional:
 
@@ -129,23 +128,20 @@ if wall.Flipped:
 
 within Part H, which correctly handles wall orientation on a per-wall basis.
 
+The script is now substantially shorter and easier to maintain, with a single source of truth for all processing logic.
+
 ---
 
 ## Next Change / Hypothesis
 
-The temporary router experiment has been successful.
+With the duplicated engine removed, the next stage of the refactor is to begin extracting logical sections of the shared engine into reusable functions.
 
-The next stage of the refactor is to remove the obsolete routing code by:
+The initial objective will be to move one section at a time into well-named functions while preserving the existing execution order and behaviour.
 
-- removing the flipped_count calculation;
-- removing the temporary if True: wrapper;
-- unindenting the shared engine to the top level;
-- renaming the engine as the shared Brick Coordinator Engine.
-
-No behavioural changes are expected from this refactor. The standard six regression tests will be repeated to confirm that the structural cleanup has introduced no regressions.
+No optimisation or architectural redesign is planned during this phase. Each extraction will be followed by regression testing to ensure that all standard wall configurations continue to produce identical results.
 
 ## Commit Message
 
-Unify flipped and non-flipped wall processing into shared engine
+Consolidate flipped and non-flipped engines into shared Brick Coordinator engine
 
 
