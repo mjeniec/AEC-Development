@@ -2,53 +2,66 @@
 
 ---
 
-# Commit 011
+# Commit 012
 
 ---
 
 ## Git Commit #
 
-011
+012
 
 ---
 
 ## Commit Message
 
-Consolidate flipped and non-flipped engines into shared Brick Coordinator engine
+Extract wall boundary loop geometry into helper function
 
 ---
 
 ## Change Made
 
-Completed the consolidation of the previously duplicated flipped and non-flipped processing engines into a single shared execution path.
+Change Made
 
-Changes include:
+Began the architectural refactor of the Brick Coordinator by extracting the Part B geometry processing into a dedicated helper function.
 
-- Removed the obsolete flipped_count calculation.
-- Removed the temporary router experiment (if True:).
-- Removed the router branching between flipped and non-flipped engines.
-- Promoted the shared processing code to become the single Brick Coordinator Engine.
-- Deleted the duplicated non-flipped engine, reducing the script size by approximately half.
-- Retained the existing conditional wall orientation handling in Part H:
+Created the new function:
 
-if wall.Flipped:
-    wall.Flip()
+extract_wall_boundary_loops(walls)
 
-which now provides the only remaining executable distinction between flipped and non-flipped walls.
+The function now performs the complete wall boundary extraction process by:
 
-No changes were made to the executable logic within Parts B–H.
+- accepting the selected Revit wall elements as input;
+- validating that a wall collection has been supplied;
+- extracting the wall thickness from the first wall;
+- generating Revit geometry for each selected wall;
+- fusing all wall solids into a single master solid using Boolean Union operations;
+- locating the downward-facing bottom face of the fused solid;
+- extracting the boundary CurveLoop objects from that face;
+- returning:
+
+all_loops
+wall_thickness_feet
+
+The inline implementation previously contained within Part B was replaced with the single function call:
+
+all_loops, wall_thickness_feet = extract_wall_boundary_loops(walls)
+
+Additional cleanup completed during this refactor:
+
+Removed the duplicate retrieval of the current Revit selection.
+Removed the obsolete user prompt requesting the user to select walls after the selection had already been obtained.
+
+No geometry extraction logic or algorithmic behaviour was changed.
 
 ---
 
 ## Reason for Change
 
-Previous refactoring work had made Parts B–H of the flipped and non-flipped engines functionally identical.
+With the Brick Coordinator now operating as a single shared processing engine, the next objective is to improve the internal architecture without altering behaviour.
 
-A temporary experiment demonstrated that the former flipped engine could successfully process every standard flipped and non-flipped wall configuration without requiring separate execution paths.
+Geometry extraction represents a single, well-defined responsibility and therefore provided an appropriate first candidate for function extraction.
 
-Following successful regression testing, the obsolete router and duplicated non-flipped engine were removed, leaving a single shared workflow responsible for all wall processing.
-
-This significantly simplifies the overall architecture while preserving the existing proven behaviour.
+This change introduces the first clear separation between the program's high-level workflow and the underlying implementation details, allowing the main script to describe what is being performed while the helper function encapsulates how the geometry is extracted.
 
 ---
 
@@ -115,33 +128,32 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The Brick Coordinator now executes a single shared processing engine for both flipped and non-flipped wall layouts.
+The new extract_wall_boundary_loops() helper function has been verified to produce identical output to the previous inline implementation.
 
-All six standard regression scenarios completed successfully following removal of the router and duplicated non-flipped engine.
+Open and closed wall layouts continue to progress through the remaining stages of the Brick Coordinator without behavioural change.
 
-This confirms that geometry extraction, shape detection, user confirmation, sorting, corner classification, resizing and wall repositioning can all be executed through a single shared workflow.
-
-The only remaining executable distinction between individual walls is the conditional:
-
-if wall.Flipped:
-    wall.Flip()
-
-within Part H, which correctly handles wall orientation on a per-wall basis.
-
-The script is now substantially shorter and easier to maintain, with a single source of truth for all processing logic.
+This represents the first architectural refactor of the shared Brick Coordinator engine, introducing a reusable function while preserving the existing tested workflow.
 
 ---
 
 ## Next Change / Hypothesis
 
-With the duplicated engine removed, the next stage of the refactor is to begin extracting logical sections of the shared engine into reusable functions.
+Continue the architectural refactor by extracting Part C into a dedicated helper function, tentatively named:
 
-The initial objective will be to move one section at a time into well-named functions while preserving the existing execution order and behaviour.
+detect_wall_tracks(all_loops, wall_thickness_feet)
 
-No optimisation or architectural redesign is planned during this phase. Each extraction will be followed by regression testing to ensure that all standard wall configurations continue to produce identical results.
+The new function will receive the boundary CurveLoop geometry produced by Part B and determine whether the wall layout represents an open run or a closed loop.
+
+It will return:
+
+- lines_side_a
+- lines_side_b
+- is_closed_loop_layout
+
+No changes to the underlying geometry interpretation algorithm are expected. The objective will again be to improve code organisation while preserving all existing behaviour
 
 ## Commit Message
 
-Consolidate flipped and non-flipped engines into shared Brick Coordinator engine
+Extract wall boundary loop geometry into helper function
 
 

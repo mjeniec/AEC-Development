@@ -47,17 +47,65 @@ from System.Windows import Window, WindowStartupLocation, Thickness, HorizontalA
 from System.Windows.Controls import StackPanel, TextBlock, Grid, Button, ColumnDefinition
 
 # ==============================================================================
-# A. WALL SELECTION
+# HELPER FUNCTIONS
+# ==============================================================================
+
+def extract_wall_boundary_loops(walls):
+
+    if not walls:
+        UI.TaskDialog.Show("Error", "No valid Walls were selected. Execution aborted.")
+        script.exit()
+
+    # Extracted thickness from the first wall instance safely
+    wall_thickness_feet = walls[0].WallType.Width
+
+    # 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
+    geo_options = Options() # Creates a Revit geometry settings object.
+    geo_options.ComputeReferences = False
+    geo_options.DetailLevel = ViewDetailLevel.Fine # Give me most detailed (Fine) version of geometry
+    master_solid = None # create empty variable to eventually store fused solid
+
+    for wall in walls:
+        geo_elem = wall.get_Geometry(geo_options) # returns geometry element, NOT just solid (therefore need following loop)
+        if geo_elem is None:
+            continue
+        for geo_obj in geo_elem: # look through everything in geomtry element container 
+            if isinstance(geo_obj, Solid) and geo_obj.Volume > 0: # take the proper solids with volume (not curves or edges)
+                if master_solid is None: # take first valid solid and store in master_solid
+                    master_solid = geo_obj 
+                else:
+                    try:  # try and fuse subsequent solids found with master_solid
+                        master_solid = BooleanOperationsUtils.ExecuteBooleanOperation(
+                            master_solid, geo_obj, BooleanOperationsType.Union
+                        )
+                    except Exception:
+                        pass
+
+    if master_solid is None:
+        UI.TaskDialog.Show("Error", "Could not generate a fused solid geometry from walls.")
+        script.exit()
+
+    # 2. Extract the profile loops from the downward-facing bottom face
+    all_loops = []
+    for face in master_solid.Faces:
+        if isinstance(face, PlanarFace) and face.FaceNormal.IsAlmostEqualTo(XYZ(0, 0, -1)):
+            for loop in face.GetEdgesAsCurveLoops():
+                all_loops.append(loop)
+            break
+
+    if not all_loops:
+        UI.TaskDialog.Show("Error", "No bottom face profile found on the fused wall geometry.")
+        script.exit()
+
+    return all_loops, wall_thickness_feet
+
+# ==============================================================================
+# A. SETUP AND VALIDATION
 # ==============================================================================
 selection = revit.get_selection()
 selected_elements = list(selection)
 walls = [el for el in selected_elements if isinstance(el, Wall)] # if instance is a wall, append to walls list
 
-# if walls is empty - script exits
-if not walls:
-    UI.TaskDialog.Show("Brick Layout", "No walls are currently selected. Select your walls first, then run the tool again.")
-    script.exit()
- 
 print("[Brick Coordinator] Running wall-processing engine.")
 
 # ADD PRINT DIAGNOSTIC TO DETERMINE SEQUENCE OF SELECTED WALL ELEMENTS (START AND END POINTS) 
@@ -78,60 +126,12 @@ for i, wall in enumerate(walls):
 
 doc = revit.doc
 uidoc = revit.uidoc
-selection = revit.get_selection()
 
 # ==============================================================================
 # B. GEOMETRY EXTRACTION: UNIFIED SOLID UNION EXTRACTION & BOUNDARY SEPARATION
 # ==============================================================================
-UI.TaskDialog.Show("Brick Layout", "Select your walls, then click Finish on the Options Bar.")
 
-selected_elements = list(selection)
-walls = [el for el in selected_elements if isinstance(el, Wall)]
-
-if not walls:
-    UI.TaskDialog.Show("Error", "No valid Walls were selected. Execution aborted.")
-    script.exit()
-
-# Extracted thickness from the first wall instance safely
-wall_thickness_feet = walls[0].WallType.Width
-
-# 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
-geo_options = Options() # Creates a Revit geometry settings object.
-geo_options.ComputeReferences = False
-geo_options.DetailLevel = ViewDetailLevel.Fine # Give me most detailed (FIne) version of geometry
-master_solid = None # create empty variable to eventually store fused solid
-
-for wall in walls:
-    geo_elem = wall.get_Geometry(geo_options) # returns geometry element, NOT just solid (therefore need following loop)
-    if geo_elem is None:
-        continue
-    for geo_obj in geo_elem: # look through everything in geomtry element container 
-        if isinstance(geo_obj, Solid) and geo_obj.Volume > 0: # take the proper solids with volume (not curves or edges)
-            if master_solid is None: # take first valid solid and store in master_solid
-                master_solid = geo_obj 
-            else:
-                try:  # try and fuse subsequent solids found with master_solid
-                    master_solid = BooleanOperationsUtils.ExecuteBooleanOperation(
-                        master_solid, geo_obj, BooleanOperationsType.Union
-                    )
-                except Exception:
-                    pass
-
-if master_solid is None:
-    UI.TaskDialog.Show("Error", "Could not generate a fused solid geometry from walls.")
-    script.exit()
-
-# 2. Extract the profile loops from the downward-facing bottom face
-all_loops = []
-for face in master_solid.Faces:
-    if isinstance(face, PlanarFace) and face.FaceNormal.IsAlmostEqualTo(XYZ(0, 0, -1)):
-        for loop in face.GetEdgesAsCurveLoops():
-            all_loops.append(loop)
-        break
-
-if not all_loops:
-    UI.TaskDialog.Show("Error", "No bottom face profile found on the fused wall geometry.")
-    script.exit()
+all_loops, wall_thickness_feet = extract_wall_boundary_loops(walls)
 
 # Tolerance configuration for downstream sorting engine
 tol = 0.05
