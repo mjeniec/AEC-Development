@@ -155,6 +155,140 @@ def shape_detection_and_track_separation(all_loops, wall_thickness_feet):
 
     return lines_side_a, lines_side_b, is_closed_loop_layout
 
+def confirm_exterior_track(lines_side_a, doc, uidoc):
+                                             
+    created_line_ids = []
+    thick_override = OverrideGraphicSettings()
+    thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
+    thick_override.SetProjectionLineWeight(4)
+
+    t_draw = Transaction(doc, "Draw Temp Track Highlight")
+    t_draw.Start()
+
+    for curve in lines_side_a:
+        try:
+            p_start = curve.GetEndPoint(0)
+            p_end = curve.GetEndPoint(1)
+            view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
+            d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve) # returns a revit element (i.e a new Detail Curve)
+            created_line_ids.append(d_line.Id)
+            doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
+        except Exception:
+            pass
+    t_draw.Commit()
+
+    # -------------------------------------------------------------------------
+    # TODO - Investigate why new XYZ objects are created with Z = 0 before
+    # Line.CreateBound().
+    #
+    # Current understanding:
+    # - p_start and p_end are already valid XYZ objects returned by
+    #   Curve.GetEndPoint().
+    # - The code rebuilds these as new XYZs using the same X/Y coordinates
+    #   but forces Z = 0.
+    #
+    # Questions to investigate:
+    # 1. Would Line.CreateBound(p_start, p_end) work directly?
+    # 2. Does NewDetailCurve require the curve to lie on the active view's
+    #    sketch plane?
+    # 3. If so, should the Z coordinate come from the active view's level
+    #    rather than being hardcoded to 0?
+    #
+    # Test by replacing:
+    #     Line.CreateBound(
+    #         XYZ(p_start.X, p_start.Y, 0),
+    #         XYZ(p_end.X, p_end.Y, 0)
+    #     )
+    # with:
+    #     Line.CreateBound(p_start, p_end)
+    # and observe whether Revit accepts the detail curve or throws a
+    # "curve must be in plane" type error.
+    # -------------------------------------------------------------------------
+
+
+    uidoc.Selection.SetElementIds(List[ElementId]())
+    uidoc.RefreshActiveView()
+
+    # Pure Programmatic WPF Windows Object Generation
+    panel = Window()
+    panel.Title = "Track Selector"
+    panel.Height = 150
+    panel.Width = 420
+    panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
+    panel.Topmost = True
+    panel.ResizeMode = panel.ResizeMode.NoResize
+
+    main_layout = StackPanel()
+    main_layout.Margin = Thickness(15)
+
+    txt_lbl = TextBlock()
+    txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
+    txt_lbl.FontWeight = FontWeights.Bold
+    txt_lbl.FontSize = 13
+    txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
+    txt_lbl.Margin = Thickness(0, 0, 0, 15)
+    main_layout.Children.Add(txt_lbl)
+
+    btn_grid = Grid()
+    col1 = ColumnDefinition()
+    col2 = ColumnDefinition()
+    btn_grid.ColumnDefinitions.Add(col1)
+    btn_grid.ColumnDefinitions.Add(col2)
+
+    state = {"approved": True}
+    # TODO: Decide how closing the dialog without selecting
+    # Yes or No should be handled.
+
+    def click_yes(sender, e):
+        state["approved"] = True
+        panel.Close()
+
+    def click_no(sender, e):
+        state["approved"] = False
+        panel.Close()
+
+
+    btn_yes = Button()
+    btn_yes.Content = "Yes, Use Highlighted Track"
+    btn_yes.Height = 30
+    btn_yes.Margin = Thickness(0, 0, 5, 0)
+    btn_yes.Click += click_yes
+    Grid.SetColumn(btn_yes, 0)
+    btn_grid.Children.Add(btn_yes)
+
+    btn_no = Button()
+    btn_no.Content = "No, Use Opposite Track"
+    btn_no.Height = 30
+    btn_no.Margin = Thickness(5, 0, 0, 0)
+    btn_no.Click += click_no
+    Grid.SetColumn(btn_no, 1)
+    btn_grid.Children.Add(btn_no)
+
+    main_layout.Children.Add(btn_grid)
+    panel.Content = main_layout
+    panel.ShowDialog()
+
+    user_selection_is_side_a = state["approved"]
+
+    t_clean = Transaction(doc, "Clean Temp Highlights")
+    t_clean.Start()
+    for l_id in created_line_ids: # created at beginning of D
+        try:
+            doc.Delete(l_id)
+        except:
+            pass
+    t_clean.Commit()
+    uidoc.RefreshActiveView()
+
+    # TODO: Ensure temporary detail lines are always removed,
+    # even if an exception occurs during user confirmation.
+    # Consider wrapping the confirmation workflow in try/finally.
+
+    # TODO: Review whether exceptions during temporary line creation
+    # should be logged rather than silently ignored.
+    
+    return user_selection_is_side_a
+
 
 # ==============================================================================
 # A. SETUP AND VALIDATION
@@ -213,8 +347,6 @@ lines_side_a, lines_side_b, is_closed_loop_layout = shape_detection_and_track_se
     wall_thickness_feet
 )
 
-
-
 # ==============================================================================
 # D. USER CONFIRMATION
 # ==============================================================================
@@ -231,128 +363,8 @@ lines_side_a, lines_side_b, is_closed_loop_layout = shape_detection_and_track_se
 # The highlighted Side A is shown to the user, who confirms
 # whether it represents the exterior face.
 
-
-created_line_ids = []
-thick_override = OverrideGraphicSettings()
-thick_override.SetProjectionLineColor(Color(255, 0, 255)) # Hot Pink (Magenta)
-thick_override.SetProjectionLineWeight(4)
-
-t_draw = Transaction(doc, "Draw Temp Track Highlight")
-t_draw.Start()
-
-for curve in lines_side_a:
-    try:
-        p_start = curve.GetEndPoint(0)
-        p_end = curve.GetEndPoint(1)
-        view_curve = Line.CreateBound(XYZ(p_start.X, p_start.Y, 0), XYZ(p_end.X, p_end.Y, 0))
-        d_line = doc.Create.NewDetailCurve(doc.ActiveView, view_curve) # returns a revit element (i.e a new Detail Curve)
-        created_line_ids.append(d_line.Id)
-        doc.ActiveView.SetElementOverrides(d_line.Id, thick_override)
-    except Exception:
-        pass
-t_draw.Commit()
-
-# -------------------------------------------------------------------------
-# TODO - Investigate why new XYZ objects are created with Z = 0 before
-# Line.CreateBound().
-#
-# Current understanding:
-# - p_start and p_end are already valid XYZ objects returned by
-#   Curve.GetEndPoint().
-# - The code rebuilds these as new XYZs using the same X/Y coordinates
-#   but forces Z = 0.
-#
-# Questions to investigate:
-# 1. Would Line.CreateBound(p_start, p_end) work directly?
-# 2. Does NewDetailCurve require the curve to lie on the active view's
-#    sketch plane?
-# 3. If so, should the Z coordinate come from the active view's level
-#    rather than being hardcoded to 0?
-#
-# Test by replacing:
-#     Line.CreateBound(
-#         XYZ(p_start.X, p_start.Y, 0),
-#         XYZ(p_end.X, p_end.Y, 0)
-#     )
-# with:
-#     Line.CreateBound(p_start, p_end)
-# and observe whether Revit accepts the detail curve or throws a
-# "curve must be in plane" type error.
-# -------------------------------------------------------------------------
-
-
-uidoc.Selection.SetElementIds(List[ElementId]())
-uidoc.RefreshActiveView()
-
-# Pure Programmatic WPF Windows Object Generation
-panel = Window()
-panel.Title = "Track Selector"
-panel.Height = 150
-panel.Width = 420
-panel.WindowStartupLocation = WindowStartupLocation.CenterScreen
-panel.Topmost = True
-panel.ResizeMode = panel.ResizeMode.NoResize
-
-main_layout = StackPanel()
-main_layout.Margin = Thickness(15)
-
-txt_lbl = TextBlock()
-txt_lbl.Text = "Is the PINK HIGHLIGHTED track the EXTERIOR side?"
-txt_lbl.FontWeight = FontWeights.Bold
-txt_lbl.FontSize = 13
-txt_lbl.TextWrapping = txt_lbl.TextWrapping.Wrap
-txt_lbl.Margin = Thickness(0, 0, 0, 15)
-main_layout.Children.Add(txt_lbl)
-
-btn_grid = Grid()
-col1 = ColumnDefinition()
-col2 = ColumnDefinition()
-btn_grid.ColumnDefinitions.Add(col1)
-btn_grid.ColumnDefinitions.Add(col2)
-
-state = {"approved": True}
-
-def click_yes(sender, e):
-    state["approved"] = True
-    panel.Close()
-
-def click_no(sender, e):
-    state["approved"] = False
-    panel.Close()
-
-btn_yes = Button()
-btn_yes.Content = "Yes, Use Highlighted Track"
-btn_yes.Height = 30
-btn_yes.Margin = Thickness(0, 0, 5, 0)
-btn_yes.Click += click_yes
-Grid.SetColumn(btn_yes, 0)
-btn_grid.Children.Add(btn_yes)
-
-btn_no = Button()
-btn_no.Content = "No, Use Opposite Track"
-btn_no.Height = 30
-btn_no.Margin = Thickness(5, 0, 0, 0)
-btn_no.Click += click_no
-Grid.SetColumn(btn_no, 1)
-btn_grid.Children.Add(btn_no)
-
-main_layout.Children.Add(btn_grid)
-panel.Content = main_layout
-panel.ShowDialog()
-
-user_selection_is_side_a = state["approved"]
-
-t_clean = Transaction(doc, "Clean Temp Highlights")
-t_clean.Start()
-for l_id in created_line_ids: # created at beginning of D
-    try:
-        doc.Delete(l_id)
-    except:
-        pass
-t_clean.Commit()
-uidoc.RefreshActiveView()
-
-
+user_selection_is_side_a = confirm_exterior_track(doc, lines_side_a, uidoc)
+    
 # PRINT DIAGNOSTIC
 print("\n===== USER CONFIRMATION =====")
 print("User selected Side A :", user_selection_is_side_a)
