@@ -52,10 +52,6 @@ from System.Windows.Controls import StackPanel, TextBlock, Grid, Button, ColumnD
 
 def extract_wall_boundary_loops(walls):
 
-    if not walls:
-        UI.TaskDialog.Show("Error", "No valid Walls were selected. Execution aborted.")
-        script.exit()
-
     # Extracted thickness from the first wall instance safely
     wall_thickness_feet = walls[0].WallType.Width
 
@@ -99,6 +95,67 @@ def extract_wall_boundary_loops(walls):
 
     return all_loops, wall_thickness_feet
 
+def shape_detection_and_track_separation(all_loops, wall_thickness_feet):
+
+    lines_side_a = []
+    lines_side_b = []
+
+    if len(all_loops) == 1: # i.e if open loop wall
+        is_closed_loop_layout = False
+        print("Morphology Identified: Open String. Splitting parallel tracks topologically...")
+
+        selected_loop = all_loops[0]
+        # Convert the CurveLoop container into an iterable list of individual Curve objects
+        loop_curves = [c for c in selected_loop] 
+        
+        # Find the indices of the end-caps matching the wall thickness
+        cap_indices = []
+        for idx, curve in enumerate(loop_curves):
+            if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
+                cap_indices.append(idx)
+       
+        if len(cap_indices) != 2:
+            UI.TaskDialog.Show("Geometry Error", "Could not identify the two wall end caps.")
+            script.exit()
+
+        cap_indices.sort() # sort indices into ascending order 
+        idx1 = cap_indices[0]
+        idx2 = cap_indices[1]
+
+        # Extract the two long continuous tracks sitting between the end caps
+        track_1 = loop_curves[idx1 + 1 : idx2] # gives all curves between first cap and second cap
+        track_2 = loop_curves[idx2 + 1 :] + loop_curves[:idx1] # gives curves from second cap to end of the list and everything before cap 1
+
+        # Remove any remaining cap curves by filtering out curves
+        # whose length is approximately equal to the wall thickness.
+        lines_side_a = [c for c in track_1 if abs(c.Length - wall_thickness_feet) >= 0.083]
+        lines_side_b = [c for c in track_2 if abs(c.Length - wall_thickness_feet) >= 0.083]
+
+    else: # i.e if closed loop wall
+        is_closed_loop_layout = True
+        print("Morphology Identified: Closed Loop. Preparing both perimeter loops for user confirmation.")
+
+        if len(all_loops) != 2:
+            UI.TaskDialog.Show( 
+                "Geometry Error",
+                "Expected exactly two perimeter loops for a closed wall layout."
+            )
+            script.exit()
+
+        lines_side_a = [c for c in all_loops[0]]
+        lines_side_b = [c for c in all_loops[1]]
+        
+    if not lines_side_a or not lines_side_b:
+        UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
+        script.exit()
+
+    # TODO: Separate geometry validation from UI error handling.
+    # Consider raising descriptive exceptions here and handling
+    # TaskDialog display and script termination in the caller.
+
+    return lines_side_a, lines_side_b, is_closed_loop_layout
+
+
 # ==============================================================================
 # A. SETUP AND VALIDATION
 # ==============================================================================
@@ -106,6 +163,13 @@ selection = revit.get_selection()
 selected_elements = list(selection)
 walls = [el for el in selected_elements if isinstance(el, Wall)] # if instance is a wall, append to walls list
 
+if not walls:
+    UI.TaskDialog.Show(
+        "Brick Layout",
+        "No walls are currently selected. Select your walls first, then run the tool again."
+    )
+    script.exit()
+    
 print("[Brick Coordinator] Running wall-processing engine.")
 
 # ADD PRINT DIAGNOSTIC TO DETERMINE SEQUENCE OF SELECTED WALL ELEMENTS (START AND END POINTS) 
@@ -142,66 +206,14 @@ def same(p1, p2):
 # C. SHAPE DETECTION
 # ==============================================================================
 
-# At this point: we have a list of all the curveloops extracted from bottom face of fused solid.
+# Interpret the extracted wall boundary loops as either an open wall run or a closed wall layout, and return the two wall-side curve collections.
 
-# If all_loops contains only one CurveLoop (wall is open loop), break into curves and store in selected_loop, 
-# locate caps and separate into two sides before storing in lines_side_a and lines_side_b
+lines_side_a, lines_side_b, is_closed_loop_layout = shape_detection_and_track_separation(
+    all_loops,
+    wall_thickness_feet
+)
 
-# Otherwise, (wall is closed loop) take each loop, break into curves and store in lines_side_a and lines_side_b
-# NOTE: Future introduction of user check for closed loop walls - take multiple curve loops forward as selected loop. 
 
-# Create side lists before determining if wall layout is open or closed
-lines_side_a = []
-lines_side_b = []
-
-if len(all_loops) == 1:   # i.e if open loop wall
-    is_closed_loop_layout = False
-    print("Morphology Identified: Open String. Splitting parallel tracks topologically...")
-
-    selected_loop = all_loops[0]
-    # Convert the CurveLoop container into an iterable list of individual Curve objects
-    loop_curves = [c for c in selected_loop] # list of curves
-    
-    # Find the indices of the end-caps matching the wall thickness
-    cap_indices = []
-    for idx, curve in enumerate(loop_curves):
-        if abs(curve.Length - wall_thickness_feet) < 0.083: # 1-inch variance tolerance
-            cap_indices.append(idx)
-
-    if len(cap_indices) != 2:
-        UI.TaskDialog.Show("Geometry Error", "Could not identify the two wall end caps.")
-        script.exit()
-
-    cap_indices.sort() # sort indices into ascending order 
-    idx1 = cap_indices[0]
-    idx2 = cap_indices[1]
-
-    # Extract the two long continuous tracks sitting between the end caps
-    track_1 = loop_curves[idx1 + 1 : idx2] # gives all curves between first cap and second cap
-    track_2 = loop_curves[idx2 + 1 :] + loop_curves[:idx1] # gives curves from second cap to end of the list and everything before cap 1
-
-    # Remove any remaining cap curves by filtering out curves
-    # whose length is approximately equal to the wall thickness.
-    lines_side_a = [c for c in track_1 if abs(c.Length - wall_thickness_feet) >= 0.083]
-    lines_side_b = [c for c in track_2 if abs(c.Length - wall_thickness_feet) >= 0.083]
-
-else: # i.e if closed loop wall
-    is_closed_loop_layout = True
-    print("Morphology Identified: Closed Loop. Preparing both perimeter loops for user confirmation.")
-
-    if len(all_loops) != 2:
-        UI.TaskDialog.Show( 
-            "Geometry Error",
-            "Expected exactly two perimeter loops for a closed wall layout."
-        )
-        script.exit()
-
-    lines_side_a = [c for c in all_loops[0]]
-    lines_side_b = [c for c in all_loops[1]]
-    
-if not lines_side_a or not lines_side_b:
-    UI.TaskDialog.Show("Geometry Error", "Could not split the profile loop into distinct tracks.")
-    script.exit()
 
 # ==============================================================================
 # D. USER CONFIRMATION

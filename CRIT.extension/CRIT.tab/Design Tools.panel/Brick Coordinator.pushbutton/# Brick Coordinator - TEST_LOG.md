@@ -2,66 +2,67 @@
 
 ---
 
-# Commit 012
+# Commit 013
 
 ---
 
 ## Git Commit #
 
-012
+013
 
 ---
 
 ## Commit Message
 
-Extract wall boundary loop geometry into helper function
+Extract shape detection and track separation into helper function
 
 ---
 
 ## Change Made
 
-Change Made
-
-Began the architectural refactor of the Brick Coordinator by extracting the Part B geometry processing into a dedicated helper function.
+Continued the architectural refactor of the Brick Coordinator by extracting the Part C shape detection and track separation logic into a dedicated helper function.
 
 Created the new function:
 
-extract_wall_boundary_loops(walls)
+shape_detection_and_track_separation(all_loops, wall_thickness_feet)
 
-The function now performs the complete wall boundary extraction process by:
+The function now performs the complete wall layout interpretation process by:
 
-- accepting the selected Revit wall elements as input;
-- validating that a wall collection has been supplied;
-- extracting the wall thickness from the first wall;
-- generating Revit geometry for each selected wall;
-- fusing all wall solids into a single master solid using Boolean Union operations;
-- locating the downward-facing bottom face of the fused solid;
-- extracting the boundary CurveLoop objects from that face;
+- accepting the extracted boundary CurveLoop objects from Part B;
+- determining whether the wall geometry represents an open wall run or a closed wall layout;
+- identifying and removing end-cap curves for open wall runs;
+- separating the wall geometry into two continuous wall-face tracks;
+- validating that the expected wall geometry has been identified;
 - returning:
 
-all_loops
-wall_thickness_feet
+lines_side_a
+lines_side_b
+is_closed_loop_layout
 
-The inline implementation previously contained within Part B was replaced with the single function call:
+The inline implementation previously contained within Part C was replaced with the single function call:
 
-all_loops, wall_thickness_feet = extract_wall_boundary_loops(walls)
+lines_side_a, lines_side_b, is_closed_loop_layout = \
+    shape_detection_and_track_separation(
+        all_loops,
+        wall_thickness_feet
+    )
 
 Additional cleanup completed during this refactor:
 
-Removed the duplicate retrieval of the current Revit selection.
-Removed the obsolete user prompt requesting the user to select walls after the selection had already been obtained.
+Moved the empty wall-selection validation back into Part A (Setup and Validation), ensuring validation occurs before geometry processing begins.
+Removed the duplicate wall-selection validation from extract_wall_boundary_loops().
 
-No geometry extraction logic or algorithmic behaviour was changed.
+No geometry processing, track separation logic, or behavioural algorithms were changed.
 
 ---
 
 ## Reason for Change
 
-With the Brick Coordinator now operating as a single shared processing engine, the next objective is to improve the internal architecture without altering behaviour.
+The next stage of the architectural refactor was to isolate the wall layout interpretation process into its own logical responsibility.
 
-Geometry extraction represents a single, well-defined responsibility and therefore provided an appropriate first candidate for function extraction.
+Shape detection and track separation represent a distinct stage of the Brick Coordinator workflow, transforming the extracted wall boundary geometry into the two continuous wall-face tracks required by the downstream processing stages.
 
-This change introduces the first clear separation between the program's high-level workflow and the underlying implementation details, allowing the main script to describe what is being performed while the helper function encapsulates how the geometry is extracted.
+Extracting this logic into a dedicated helper function further separates the high-level workflow from the implementation details, improving readability while preserving the existing behaviour.
 
 ---
 
@@ -128,32 +129,29 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The new extract_wall_boundary_loops() helper function has been verified to produce identical output to the previous inline implementation.
+The new shape_detection_and_track_separation() helper function has been verified to produce identical output to the previous inline implementation.
 
-Open and closed wall layouts continue to progress through the remaining stages of the Brick Coordinator without behavioural change.
+All six standard regression tests continue to pass, confirming that the extracted helper function preserves the existing behaviour of both open wall runs and closed wall layouts.
 
-This represents the first architectural refactor of the shared Brick Coordinator engine, introducing a reusable function while preserving the existing tested workflow.
+This represents the second architectural refactor of the shared Brick Coordinator engine and continues the transition from a monolithic script towards a modular, responsibility-based design.
 
 ---
 
 ## Next Change / Hypothesis
 
-Continue the architectural refactor by extracting Part C into a dedicated helper function, tentatively named:
+Continue the architectural refactor by extracting Part D (User Confirmation) into a dedicated helper function.
 
-detect_wall_tracks(all_loops, wall_thickness_feet)
+The new function will be responsible for:
 
-The new function will receive the boundary CurveLoop geometry produced by Part B and determine whether the wall layout represents an open run or a closed loop.
+displaying the temporary highlighted wall-face track;
+presenting the user confirmation dialog;
+collecting the user's exterior face selection;
+removing the temporary graphics from the active view;
+returning:
+user_selection_is_side_a
 
-It will return:
+The objective will again be to improve code organisation while preserving the existing workflow and behaviour.
 
-- lines_side_a
-- lines_side_b
-- is_closed_loop_layout
 
-No changes to the underlying geometry interpretation algorithm are expected. The objective will again be to improve code organisation while preserving all existing behaviour
-
-## Commit Message
-
-Extract wall boundary loop geometry into helper function
 
 
