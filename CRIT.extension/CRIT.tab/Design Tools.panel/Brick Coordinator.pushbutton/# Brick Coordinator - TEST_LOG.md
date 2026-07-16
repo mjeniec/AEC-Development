@@ -2,52 +2,50 @@
 
 ---
 
-# Commit 014
+# Commit 015
 
 ---
 
 ## Git Commit #
 
-014
+015
 
 ---
 
 ## Commit Message
 
-Extract exterior track confirmation into helper function
+Extract wall-track packaging into helper function
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor of the Brick Coordinator by extracting the Part D user confirmation workflow into a dedicated helper function.
+Continued the architectural refactor of the Brick Coordinator by extracting the first logical responsibility of Part E (Sorting) into a dedicated helper function.
 
 Created the new function:
 
-confirm_exterior_track(doc, lines_side_a, uidoc)
+package_track(curves_list, walls)
 
-The function now performs the complete exterior face confirmation process by:
+The function now performs the complete wall-track packaging process by:
 
-- accepting the temporary wall-face track to be displayed to the user;
-- creating temporary Detail Lines representing the selected wall-face track;
-- applying graphical overrides to highlight the temporary geometry;
-- displaying the user confirmation window;
-- recording the user's confirmation of whether the highlighted track represents the exterior wall face;
-- removing all temporary graphics from the active Revit view;
-- refreshing the Revit view;
-- returning:
+- accepting the user-selected wall-face track;
+- accepting the original selected Revit wall elements;
+- identifying the closest Revit wall corresponding to each boundary curve;
+- extracting the start and end points of each curve;
+- packaging each curve together with its associated Revit wall into a dictionary;
+- returning a list of packaged wall-track dictionaries.
 
-user_selection_is_side_a
+The inline implementation previously contained within Part E was replaced with the single function call:
 
-The inline implementation previously contained within Part D was replaced with the single function call:
+raw_side = package_track(selected_track, walls)
 
-user_selection_is_side_a = confirm_exterior_track(
-    doc,
-    lines_side_a,
-    uidoc
-)
+As part of this refactor:
 
-No changes were made to the temporary highlighting workflow, user interface behaviour, or transaction sequence.
+the original hidden dependency on the external walls variable was removed by making walls an explicit function parameter;
+wall selection validation was moved back into Part A (Setup and Validation), removing the duplicated validation from 
+extract_wall_boundary_loop() and ensuring input validation occurs at the program boundary before downstream processing begins.
+
+No changes were made to the wall-matching algorithm or downstream sorting behaviour.
 
 The existing implementation was intentionally preserved during extraction to ensure identical behaviour.
 
@@ -55,11 +53,18 @@ The existing implementation was intentionally preserved during extraction to ens
 
 ## Reason for Change
 
-The next stage of the architectural refactor was to isolate the user interaction stage of the Brick Coordinator into its own logical responsibility.
+The next stage of the architectural refactor was to isolate the first responsibility within Part E.
 
-User confirmation represents a distinct stage of the workflow, allowing the user to visually verify which wall-face track should be treated as the exterior before the geometry proceeds into the sorting and corner classification stages.
+Part E performs two distinct tasks:
 
-Extracting this logic into a dedicated helper function further improves the readability of the main program by separating the high-level workflow from the implementation details of temporary graphics, user interface construction, and cleanup operations.
+associating each selected boundary curve with its corresponding Revit wall element;
+sorting those packaged curves into a continuous ordered sequence.
+
+This commit extracts only the first responsibility.
+
+Making walls an explicit input improves the function interface by removing a hidden dependency and clearly documenting the information required by the helper function.
+
+This continues the transition towards a responsibility-based architecture while preserving the existing proven workflow.
 
 ---
 
@@ -126,24 +131,28 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The new confirm_exterior_track() helper function has been verified to produce identical behaviour to the previous inline implementation.
+The new package_track() helper function has been verified to produce identical behaviour to the previous inline implementation.
 
-All six standard regression tests continue to pass, confirming that the temporary highlighting workflow, user confirmation process, and downstream wall processing remain unchanged.
+All six standard regression tests continue to pass, confirming that wall-to-curve association, downstream sorting, corner classification, resizing and wall repositioning remain unchanged.
 
-This represents the third architectural refactor of the shared Brick Coordinator engine and continues the transition from a monolithic script towards a modular, responsibility-based design.
+This represents the fourth architectural refactor of the shared Brick Coordinator engine and further improves the separation of responsibilities within the main processing workflow.
 
 ---
 
 ## Next Change / Hypothesis
 
-Continue the architectural refactor by extracting Part E (Sorting) into a dedicated helper function.
+Continue the architectural refactor by extracting the remaining responsibility within Part E into a dedicated helper function.
 
-The new function will be responsible for:
+The next function will be responsible for:
 
-selecting the user-confirmed exterior wall-face track;
-associating each curve with its corresponding Revit wall element;
-sorting the wall-face track into a continuous ordered sequence;
-returning the ordered wall data required by the downstream corner-classification stage.
+- sorting the packaged wall-track dictionaries into a continuous ordered sequence;
+- returning the ordered wall data required by the downstream corner-classification stage.
+
+Following extraction, review whether the user-selected track should first be assigned to a dedicated variable such as:
+
+selected_track
+
+allowing the remainder of the workflow to operate on the resolved exterior track without needing to retain knowledge of Side A and Side B.
 
 The objective will again be to improve code organisation while preserving the existing workflow and behaviour.
 

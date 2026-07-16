@@ -53,6 +53,7 @@ from System.Windows.Controls import StackPanel, TextBlock, Grid, Button, ColumnD
 def extract_wall_boundary_loops(walls):
 
     # Extracted thickness from the first wall instance safely
+    # Note: consider walls of varying thickness
     wall_thickness_feet = walls[0].WallType.Width
 
     # 1. Fuse ALL wall solids to dissolve butt joints and calculate corners
@@ -236,8 +237,7 @@ def confirm_exterior_track(lines_side_a, doc, uidoc):
     btn_grid.ColumnDefinitions.Add(col2)
 
     state = {"approved": True}
-    # TODO: Decide how closing the dialog without selecting
-    # Yes or No should be handled.
+    # TODO: Decide how closing the dialog without selecting Yes or No should be handled.
 
     def click_yes(sender, e):
         state["approved"] = True
@@ -286,9 +286,30 @@ def confirm_exterior_track(lines_side_a, doc, uidoc):
 
     # TODO: Review whether exceptions during temporary line creation
     # should be logged rather than silently ignored.
-    
+
     return user_selection_is_side_a
 
+
+# package_trac: For each boundary curve, identify the closest original Wall element and
+# package it together with the curve's start and end XYZ points.
+
+def package_track(curves_list, walls):
+    packaged = []
+    for c in curves_list:
+        p_start = c.GetEndPoint(0)
+        p_end = c.GetEndPoint(1)
+        mid_point = c.Evaluate(0.5, True) # (Normalized = True) returns XYZ object for midpoint
+
+        matched_wall = None # variable to store matched wall that best matches current curve
+        closest_dist = float('inf') # Start with infinity so any real distance is smaller.
+        for w in walls:
+            if isinstance(w.Location, LocationCurve): # if wall's location object is a location curve
+                dist = w.Location.Curve.Distance(mid_point) # call distance method on wall's location curve
+                if dist < closest_dist: # if dist less than current value of closest_dist
+                    closest_dist = dist
+                    matched_wall = w
+        packaged.append({"Wall": matched_wall, "Start": p_start, "End": p_end})
+    return packaged
 
 # ==============================================================================
 # A. SETUP AND VALIDATION
@@ -352,8 +373,6 @@ lines_side_a, lines_side_b, is_closed_loop_layout = shape_detection_and_track_se
 # ==============================================================================
 # At this point:
 
-# Closed Loop Layout and Open Loop Layout:
-
 # lines_side_a contains one side of the wall run.
 # lines_side_b contains the opposite side of the wall run.
 
@@ -363,7 +382,7 @@ lines_side_a, lines_side_b, is_closed_loop_layout = shape_detection_and_track_se
 # The highlighted Side A is shown to the user, who confirms
 # whether it represents the exterior face.
 
-user_selection_is_side_a = confirm_exterior_track(doc, lines_side_a, uidoc)
+user_selection_is_side_a = confirm_exterior_track(lines_side_a, doc, uidoc)
     
 # PRINT DIAGNOSTIC
 print("\n===== USER CONFIRMATION =====")
@@ -384,32 +403,28 @@ print("User selected Side A :", user_selection_is_side_a)
 #
 # Part E now packages and sorts only the user-selected side.
 
+# NOTE: FUTURE ARCHITECTURE REVIEW
+# --------------------------
+# Part D currently returns the boolean:
+#     user_selection_is_side_a
+#
+# Part E then resolves this into the selected exterior track.
+#
+# Consider simplifying the data flow by introducing:
+#     selected_track
+#
+# or by having Part D return the selected track directly, allowing
+# downstream Parts E–H to operate on the resolved exterior track without
+# needing knowledge of Side A and Side B.
+#
+# Review after the function-extraction refactor is complete.
 
-# For each boundary curve, identify the closest original Wall element and
-# package it together with the curve's start and end XYZ points.
-
-def package_track(curves_list):
-    packaged = []
-    for c in curves_list:
-        p_start = c.GetEndPoint(0)
-        p_end = c.GetEndPoint(1)
-        mid_point = c.Evaluate(0.5, True) # (Normalized = True) returns XYZ object for midpoint
-
-        matched_wall = None # variable to store matched wall that best matches current curve
-        closest_dist = float('inf') # Start with infinity so any real distance is smaller.
-        for w in walls:
-            if isinstance(w.Location, LocationCurve): # if wall's location object is a location curve
-                dist = w.Location.Curve.Distance(mid_point) # call distance method on wall's location curve
-                if dist < closest_dist: # if dist less than current value of closest_dist
-                    closest_dist = dist
-                    matched_wall = w
-        packaged.append({"Wall": matched_wall, "Start": p_start, "End": p_end})
-    return packaged
 
 if user_selection_is_side_a:
-    raw_side = package_track(lines_side_a)
+    raw_side = package_track(lines_side_a, walls)
 else:
-    raw_side = package_track(lines_side_b)
+    raw_side = package_track(lines_side_b, walls)
+
 
 # NOTE: found is reset to False at the start of each while iteration.
 # The for loop then checks EVERY remaining curve looking for a connection.
