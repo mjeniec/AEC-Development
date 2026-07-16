@@ -2,50 +2,60 @@
 
 ---
 
-# Commit 015
+# Commit 016
 
 ---
 
 ## Git Commit #
 
-015
+016
 
 ---
 
 ## Commit Message
 
-Extract wall-track packaging into helper function
+Extract packaged track sorting into helper function
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor of the Brick Coordinator by extracting the first logical responsibility of Part E (Sorting) into a dedicated helper function.
+Continued the architectural refactor of the Brick Coordinator by extracting the remaining logical responsibility within Part E into a dedicated helper function.
 
 Created the new function:
 
-package_track(curves_list, walls)
+sort_packaged_track(raw_edges_list)
 
-The function now performs the complete wall-track packaging process by:
+The function now performs the complete packaged-track sorting process by:
 
-- accepting the user-selected wall-face track;
-- accepting the original selected Revit wall elements;
-- identifying the closest Revit wall corresponding to each boundary curve;
-- extracting the start and end points of each curve;
-- packaging each curve together with its associated Revit wall into a dictionary;
-- returning a list of packaged wall-track dictionaries.
+- accepting the list of packaged wall-track dictionaries produced by package_track();
+- copying the input list so the original packaged data is not directly modified;
+- selecting an initial edge;
+- comparing remaining edge start and end points against the current endpoint;
+- reversing edge direction where required so connected edges follow a consistent sequence;
+- building a continuous ordered list of packaged wall-track dictionaries;
+- appending any remaining unsorted edges through the existing fallback behaviour;
+- returning the ordered list.
 
-The inline implementation previously contained within Part E was replaced with the single function call:
+The inline sorting implementation previously contained within Part E was moved into the helper-functions section.
 
-raw_side = package_track(selected_track, walls)
+The previous two-step assignment:
 
-As part of this refactor:
+sorted_side = sort_packaged_track(raw_side)
+ordered_data = sorted_side
 
-the original hidden dependency on the external walls variable was removed by making walls an explicit function parameter;
-wall selection validation was moved back into Part A (Setup and Validation), removing the duplicated validation from 
-extract_wall_boundary_loop() and ensuring input validation occurs at the program boundary before downstream processing begins.
+was simplified to:
 
-No changes were made to the wall-matching algorithm or downstream sorting behaviour.
+ordered_data = sort_packaged_track(raw_side)
+
+The point-comparison helper was also consolidated into a single shared definition:
+
+TOL = 0.05
+
+def same(p1, p2):
+    return p1.DistanceTo(p2) < TOL
+
+No changes were made to the track-sorting algorithm, endpoint comparison behaviour, or fallback handling.
 
 The existing implementation was intentionally preserved during extraction to ensure identical behaviour.
 
@@ -53,18 +63,18 @@ The existing implementation was intentionally preserved during extraction to ens
 
 ## Reason for Change
 
-The next stage of the architectural refactor was to isolate the first responsibility within Part E.
+Part E performs two distinct responsibilities:
 
-Part E performs two distinct tasks:
+1. associating selected boundary curves with their corresponding Revit wall elements;
+2. sorting those packaged curve-and-wall records into a continuous ordered sequence.
 
-associating each selected boundary curve with its corresponding Revit wall element;
-sorting those packaged curves into a continuous ordered sequence.
+The first responsibility was extracted into package_track() in Commit 015.
 
-This commit extracts only the first responsibility.
+This commit completes the functional extraction of Part E by isolating the second responsibility within sort_packaged_track().
 
-Making walls an explicit input improves the function interface by removing a hidden dependency and clearly documenting the information required by the helper function.
+Removing the intermediate sorted_side variable also simplifies the data flow by assigning the function result directly to the variable used by downstream processing.
 
-This continues the transition towards a responsibility-based architecture while preserving the existing proven workflow.
+Consolidating the tolerance and point-comparison helper into a single definition creates one source of truth for endpoint matching and prevents later function definitions from silently replacing earlier ones.
 
 ---
 
@@ -131,30 +141,43 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The new package_track() helper function has been verified to produce identical behaviour to the previous inline implementation.
+The new sort_packaged_track() helper function has been verified to produce identical behaviour to the previous inline implementation.
 
-All six standard regression tests continue to pass, confirming that wall-to-curve association, downstream sorting, corner classification, resizing and wall repositioning remain unchanged.
+All six standard regression tests continue to pass, confirming that:
 
-This represents the fourth architectural refactor of the shared Brick Coordinator engine and further improves the separation of responsibilities within the main processing workflow.
+- packaged edges are still sorted into the correct continuous sequence;
+- reversed edge directions are handled correctly;
+- downstream corner classification remains unchanged;
+- brick resizing remains unchanged;
+- physical wall repositioning remains unchanged.
+
+Part E is now functionally separated into two clear responsibilities:
+
+raw_side = package_track(...)
+ordered_data = sort_packaged_track(raw_side)
+
+This completes the initial function-extraction refactor of Part E and further improves the readability of the main workflow.
 
 ---
 
 ## Next Change / Hypothesis
 
-Continue the architectural refactor by extracting the remaining responsibility within Part E into a dedicated helper function.
+Continue the architectural refactor with Part F (Corner Classification).
 
-The next function will be responsible for:
+Before extracting Part F, identify its distinct responsibilities, required inputs and returned outputs.
 
-- sorting the packaged wall-track dictionaries into a continuous ordered sequence;
-- returning the ordered wall data required by the downstream corner-classification stage.
+Part F currently appears to:
 
-Following extraction, review whether the user-selected track should first be assigned to a dedicated variable such as:
+- determine the number of ordered edges;
+- determine or verify whether the layout is open or closed;
+- calculate local cross products at edge junctions;
+- classify each edge’s start and end condition;
+- assign the appropriate brick condition;
+- build the EDGES data structure required by Part G.
 
-selected_track
+The next step should first determine whether all of this represents one responsibility or whether Part F should be divided into smaller helper functions.
 
-allowing the remainder of the workflow to operate on the resolved exterior track without needing to retain knowledge of Side A and Side B.
-
-The objective will again be to improve code organisation while preserving the existing workflow and behaviour.
+The existing note regarding the redundant closed-loop check should remain unresolved during the initial extraction unless removing it is handled as a separate, controlled change.
 
 
 

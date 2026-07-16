@@ -247,7 +247,6 @@ def confirm_exterior_track(lines_side_a, doc, uidoc):
         state["approved"] = False
         panel.Close()
 
-
     btn_yes = Button()
     btn_yes.Content = "Yes, Use Highlighted Track"
     btn_yes.Height = 30
@@ -289,10 +288,13 @@ def confirm_exterior_track(lines_side_a, doc, uidoc):
 
     return user_selection_is_side_a
 
+# Tolerance configuration for downstream sorting engine
+TOL = 0.05
+def same(p1, p2):
+    return p1.DistanceTo(p2) < TOL
 
-# package_trac: For each boundary curve, identify the closest original Wall element and
+# package_track: For each boundary curve, identify the closest original Wall element and
 # package it together with the curve's start and end XYZ points.
-
 def package_track(curves_list, walls):
     packaged = []
     for c in curves_list:
@@ -310,6 +312,55 @@ def package_track(curves_list, walls):
                     matched_wall = w
         packaged.append({"Wall": matched_wall, "Start": p_start, "End": p_end})
     return packaged
+# NOTE: found is reset to False at the start of each while iteration.
+# The for loop then checks EVERY remaining curve looking for a connection.
+# If a match is found, found is set to True and the for loop exits early.
+# The 'if not found' check is ONLY reached after the for loop finishes.
+# If found is True, the check is skipped and the next while iteration begins.
+# If found is still False (no match found after checking every remaining curve),
+# the while loop is exited.
+
+# Define standard loop sorting function that works regardless of track alignment variations
+def sort_packaged_track(raw_edges_list):
+    if not raw_edges_list: # checks for empty list - e.g if passed raw_side_b in closed loop scenario, returns empty list & does not try to sort
+        return []
+    unused = raw_edges_list[:]
+    current = unused.pop(0)
+    ordered_list = [current]
+    current_point = current["End"]
+
+    while unused:
+        found = False
+        for i, edge in enumerate(unused):
+            s = edge["Start"]
+            e = edge["End"]
+            w = edge["Wall"]
+            if same(s, current_point):
+                ordered_list.append({"Wall": w, "Start": s, "End": e})
+                current_point = e
+                unused.pop(i)
+                found = True
+                break # exits the FOR loop
+            elif same(e, current_point):
+                ordered_list.append({"Wall": w, "Start": e, "End": s})
+                current_point = s
+                unused.pop(i)
+                found = True
+                break # exits the FOR loop
+        if not found: # if match found, this evaluates to 'if not true' (i. if FALSE) and while loop continues
+            break
+
+    # TODO - Review fallback behaviour below.
+    # Currently any unsorted curves are appended to the end of the list.
+    # Consider warning the user or stopping the tool instead, as remaining
+    # curves may indicate an unexpected geometry or sorting failure.
+
+    # Fallback safety: if there are remaining unsorted segments due to a geometry split, append them safely
+    if unused:
+        for remaining in unused:
+            ordered_list.append(remaining)
+
+    return ordered_list
 
 # ==============================================================================
 # A. SETUP AND VALIDATION
@@ -352,11 +403,6 @@ uidoc = revit.uidoc
 
 all_loops, wall_thickness_feet = extract_wall_boundary_loops(walls)
 
-# Tolerance configuration for downstream sorting engine
-tol = 0.05
-def same(p1, p2):
-    return p1.DistanceTo(p2) < tol
-
 # ==============================================================================
 # C. SHAPE DETECTION
 # ==============================================================================
@@ -386,7 +432,7 @@ user_selection_is_side_a = confirm_exterior_track(lines_side_a, doc, uidoc)
     
 # PRINT DIAGNOSTIC
 print("\n===== USER CONFIRMATION =====")
-print("User selected Side A :", user_selection_is_side_a)
+print("User selected Side A:", user_selection_is_side_a)
 
 # ==============================================================================
 # E. SORTING
@@ -403,6 +449,7 @@ print("User selected Side A :", user_selection_is_side_a)
 #
 # Part E now packages and sorts only the user-selected side.
 
+# --------------------------
 # NOTE: FUTURE ARCHITECTURE REVIEW
 # --------------------------
 # Part D currently returns the boolean:
@@ -426,64 +473,13 @@ else:
     raw_side = package_track(lines_side_b, walls)
 
 
-# NOTE: found is reset to False at the start of each while iteration.
-# The for loop then checks EVERY remaining curve looking for a connection.
-# If a match is found, found is set to True and the for loop exits early.
-# The 'if not found' check is ONLY reached after the for loop finishes.
-# If found is True, the check is skipped and the next while iteration begins.
-# If found is still False (no match found after checking every remaining curve),
-# the while loop is exited.
-
-# Define standard loop sorting function that works regardless of track alignment variations
-def sort_packaged_track(raw_edges_list):
-    if not raw_edges_list: # checks for empty list - e.g if passed raw_side_b in closed loop scenario, returns empty list & does not try to sort
-        return []
-    unused = raw_edges_list[:]
-    current = unused.pop(0)
-    ordered_list = [current]
-    current_point = current["End"]
-
-    while unused:
-        found = False
-        for i, edge in enumerate(unused):
-            s = edge["Start"]
-            e = edge["End"]
-            w = edge["Wall"]
-            if same(s, current_point):
-                ordered_list.append({"Wall": w, "Start": s, "End": e})
-                current_point = e
-                unused.pop(i)
-                found = True
-                break # exits the FOR loop
-            elif same(e, current_point):
-                ordered_list.append({"Wall": w, "Start": e, "End": s})
-                current_point = s
-                unused.pop(i)
-                found = True
-                break # exits the FOR loop
-        if not found: # if match found, this evaluates to 'if not true' (i. if FALSE) and while loop continues
-            break
-
-    
-    # TODO - Review fallback behaviour below.
-    # Currently any unsorted curves are appended to the end of the list.
-    # Consider warning the user or stopping the tool instead, as remaining
-    # curves may indicate an unexpected geometry or sorting failure.
-
-    # Fallback safety: if there are remaining unsorted segments due to a geometry split, append them safely
-    if unused:
-        for remaining in unused:
-            ordered_list.append(remaining)
-
-    return ordered_list
-
-# Sort both tracks cleanly
-sorted_side = sort_packaged_track(raw_side)
-
-ordered_data = sorted_side
+# Sort selected track cleanly
+ordered_data = sort_packaged_track(raw_side)
 
 # Extract the sorted endpoints required downstream for calculation matrices
 ordered = [(item["Start"], item["End"]) for item in ordered_data]
+
+
 
 # PRINT DIAGNOSTIC
 print("\n===== SORTED TRACK =====")
