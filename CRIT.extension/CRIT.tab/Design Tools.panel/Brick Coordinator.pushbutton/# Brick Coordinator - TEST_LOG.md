@@ -2,54 +2,57 @@
 
 ---
 
-# Commit 019
+# Commit 020
 
 ---
 
 ## Git Commit #
 
-019
+020
 
 ---
 
 ## Commit Message
 
-Extract brick condition determination helper
+Extract corner condition determination helper
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor of Part F by extracting the brick-condition assignment logic into a dedicated helper function.
+Continued the architectural refactor of Part F by extracting the corner-classification logic into a dedicated helper function.
 
 Created the new helper:
 
-determine_brick_condition(
+determine_corner_condition(
     edge_index,
-    num_edges,
     is_closed_loop_layout,
-    start_is_external,
-    end_is_external
+    ordered_data,
+    pt_start,
+    pt_end,
+    num_edges
 )
 
-The helper now performs the complete brick-condition selection process by:
+The helper now performs the complete corner-condition determination process by:
 
-- determining whether the current wall is positioned at the end of an open wall run or forms part of the standard corner-processing logic;
-- applying the special brick coordination rules for the first and last walls of open wall layouts;
-- applying the standard corner-based brick coordination rules for closed loops and intermediate walls;
-- returning the appropriate brick coordination condition (Co-, Co, or Co+) to the calling function.
+- identifying whether the current wall begins or ends at an open wall termination;
+- calculating the turn direction at the start corner using the previous wall segment;
+- calculating the turn direction at the end corner using the following wall segment;
+- determining whether each corner is classified as external or internal based on the cross-product result;
+- returning the start and end corner classifications to the calling function.
 
-The inline brick-condition assignment previously contained within classify_brick_conditions() was replaced with the helper call:
+The inline corner-classification logic previously contained within classify_brick_conditions() was replaced with the helper call:
 
-brick_condition = determine_brick_condition(
+start_is_external, end_is_external = determine_corner_condition(
     edge_index,
-    num_edges,
     is_closed_loop_layout,
-    start_is_external,
-    end_is_external
+    ordered_data,
+    pt_start,
+    pt_end,
+    num_edges
 )
 
-The helper preserves the existing decision logic exactly as implemented previously.
+The helper preserves the existing corner-classification algorithm exactly as implemented previously.
 
 No behavioural changes were made to the brick coordination algorithm.
 
@@ -64,9 +67,9 @@ classify_brick_conditions() previously performed several separate responsibiliti
 - selecting correct brick conditions;
 - packaging wall data.
 
-Extracting the selection of brick conditions into its own helper gives that decision process a clearly defined responsibility while reducing the size and complexity of the main classification function.
+Extracting the determination of corner conditions into its own helper gives that geometric decision process a clearly defined responsibility while further reducing the size and complexity of the main classification function.
 
-This continues the incremental architectural refactor by separating individual processing responsibilities without modifying the underlying algorithm.
+This continues the staged architectural refactor by separating individual processing responsibilities without modifying the underlying algorithm.
 
 ---
 
@@ -133,7 +136,7 @@ Wall repositioning successful.
 
 ## Overall Result
 
-Extracting the brick-condition determination into a dedicated helper function produced no behavioural changes.
+Extracting the corner-condition determination into a dedicated helper function produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
@@ -142,7 +145,7 @@ All six standard regression tests continue to pass, confirming that:
 - wall resizing remains unchanged;
 - physical wall repositioning remains unchanged.
 
-The responsibility for selecting the appropriate brick coordination condition is now isolated within a dedicated helper function, making classify_brick_conditions() easier to read while preserving the existing implementation.
+The responsibility for determining the start and end corner classifications is now isolated within a dedicated helper function, making classify_brick_conditions() simpler to read while preserving the existing implementation.
 
 ---
 
@@ -150,8 +153,14 @@ The responsibility for selecting the appropriate brick coordination condition is
 
 Review the remaining responsibilities within classify_brick_conditions() to determine whether further extraction is appropriate.
 
-The most likely remaining candidate is the repeated logic used to determine the start and end corner conditions for each wall segment. If extracted carefully, this could further simplify the main classification loop while preserving the existing corner-classification algorithm.
+The remaining function now primarily:
 
+- calculates wall lengths;
+- delegates corner classification;
+- delegates brick-condition selection;
+- packages the processed wall data.
+
+The next stage of the refactor should focus on identifying whether any of these remaining responsibilities can be extracted without making the code less readable. At this stage, further extractions should continue only where they improve clarity by encapsulating a complete piece of behaviour rather than simply reducing the number of lines of code.
 
 
 
