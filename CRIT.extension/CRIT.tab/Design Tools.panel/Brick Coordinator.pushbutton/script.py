@@ -362,6 +362,132 @@ def sort_packaged_track(raw_edges_list):
 
     return ordered_list
 
+# def cross_product: Calculates thes Z value of the cross product for 3 points. 
+
+# Returns the signed Z component of the cross product formed by
+# three consecutive points (p1 → p2 → p3).
+#
+# Positive value  = left turn
+# Negative value  = right turn
+#
+# Since the selected exterior track always has OUTSIDE on its LEFT,
+# right turns represent external corners and left turns represent
+# internal corners.
+
+def cross_product_z(p1, p2, p3):
+    v1_x = p2.X - p1.X
+    v1_y = p2.Y - p1.Y
+    v2_x = p3.X - p2.X
+    v2_y = p3.Y - p2.Y
+    return (v1_x * v2_y) - (v1_y * v2_x)
+
+def classify_brick_conditions(ordered_data, is_closed_loop_layout):
+
+    num_edges = len(ordered_data)
+    edges = []
+
+    print("\n===== PART F: CORNER CLASSIFICATION =====")
+    print("Closed Loop :", is_closed_loop_layout)
+    print("Rule        : OUTSIDE is LEFT of selected exterior track")
+    print("Therefore  : RIGHT turn = external corner")
+
+
+    # Calculate length of curve
+    for i in range(num_edges):
+        edge_curr = ordered_data[i]
+        pt_start = edge_curr["Start"]
+        pt_end = edge_curr["End"]
+
+        dx_mm = (pt_end.X - pt_start.X) * 304.8    # convert to mm
+        dy_mm = (pt_end.Y - pt_start.Y) * 304.8    # convert to mm
+        length_mm = math.sqrt(dx_mm**2 + dy_mm**2) # Calculate the true (Euclidean) length of the edge using the X and Y
+                                                    # coordinate differences (Pythagorean theorem). Works for walls at any angle.
+
+    # TODO - Consider storing curve length during package_track().
+    # At that point the original Curve object is still available, so c.Length could
+    # be converted to mm and stored in the package dictionary, avoiding the need to
+    # recalculate length later from Start/End XYZ points.
+
+    # below block calculates end condition of each curve using cross product z and direction
+
+        # START CONDITION
+        # If this is the first edge in an open run, there is no previous wall segment forming a corner,
+        # so the start point is an open end.
+        # NOTE: start_is_open and end is open now appear redundant - consider removing
+        if i == 0 and not is_closed_loop_layout:
+            start_is_external = False 
+            start_is_open = True
+            print("Start condition : OPEN END")
+
+        # Calculates the turn through the corner where the previous edge meets the start of the current edge.
+        else:
+            edge_prev = ordered_data[(i - 1) % num_edges]
+
+            # Turn from previous edge into current edge
+            cp_start_z = cross_product_z(edge_prev["Start"], edge_prev["End"], pt_end)
+
+            # cp_start_z > 0 means the path turns LEFT.
+            # Since outside is on the LEFT, a LEFT turn is INTERNAL.
+            if cp_start_z < 0:
+                start_is_external = True
+            else:
+                start_is_external = False
+
+            start_is_open = False
+
+            print("cp_start_z       :", cp_start_z)
+            print("start_external   :", start_is_external)
+
+        # END CONDITION
+        # If this is the last edge in an open run, there is no following wall segment forming a corner,
+        # so the end point is an open end.
+        if i == num_edges - 1 and not is_closed_loop_layout:
+            end_is_external = False
+            end_is_open = True
+            print("End condition   : OPEN END")
+
+        # Calculates the turn through the corner where the current edge meets the next edge.
+        else:
+            edge_next = ordered_data[(i + 1) % num_edges]
+
+            # Turn from current edge into next edge
+            cp_end_z = cross_product_z(pt_start, pt_end, edge_next["End"])
+
+            # cp_end_z > 0 means the path turns LEFT.
+            # Since outside is on the LEFT, a LEFT turn is INTERNAL.
+            if cp_end_z < 0:
+                end_is_external = True
+            else:
+                end_is_external = False
+
+            end_is_open = False
+
+            print("cp_end_z         :", cp_end_z)
+            print("end_external     :", end_is_external)
+
+        # BRICK CONDITION
+        if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
+            if num_edges == 1: brick_condition = "Co-" 
+            elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
+            else: brick_condition = "Co-" if start_is_external else "Co"
+        else:
+            if start_is_external and end_is_external: brick_condition = "Co-"   
+            elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
+            else: brick_condition = "Co+"   
+
+        print("Brick condition  :", brick_condition)    
+
+        wall_info = {
+            "Wall Object": edge_curr["Wall"], # Injects physical wall object reference safely into data map
+            "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
+                            (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
+            "Length": length_mm,
+            "Condition": brick_condition
+        }
+        edges.append(wall_info)
+
+    return edges
+
 # ==============================================================================
 # A. SETUP AND VALIDATION
 # ==============================================================================
@@ -542,136 +668,7 @@ for i, edge in enumerate(ordered_data):
 # 'ordered_data' contains a sequentially ordered list of dictionaries.
 # Each dictionary stores the matched Wall element plus the Start and End XYZ points.
 
-
-num_edges = len(ordered_data)
-EDGES = []
-
-first_point = ordered_data[0]["Start"]
-last_point = ordered_data[-1]["End"]
-is_closed_loop_layout = same(first_point, last_point) 
-
-# TODO - Review whether this closed-loop check is still required.
-# The layout type was already determined in Section C and has not changed.
-# Consider reusing the existing is_closed_loop_layout value.
-
-
-# def cross_product: Calculates thes Z value of the cross product for 3 points. 
-
-# Returns the signed Z component of the cross product formed by
-# three consecutive points (p1 → p2 → p3).
-#
-# Positive value  = left turn
-# Negative value  = right turn
-#
-# Since the selected exterior track always has OUTSIDE on its LEFT,
-# right turns represent external corners and left turns represent
-# internal corners.
-
-def cross_product_z(p1, p2, p3):
-    v1_x = p2.X - p1.X
-    v1_y = p2.Y - p1.Y
-    v2_x = p3.X - p2.X
-    v2_y = p3.Y - p2.Y
-    return (v1_x * v2_y) - (v1_y * v2_x)
-
-print("\n===== PART F: CORNER CLASSIFICATION =====")
-print("Closed Loop :", is_closed_loop_layout)
-print("Rule        : OUTSIDE is LEFT of selected exterior track")
-print("Therefore  : RIGHT turn = external corner")
-
-
-# Calculate length of curve
-for i in range(num_edges):
-    edge_curr = ordered_data[i]
-    pt_start = edge_curr["Start"]
-    pt_end = edge_curr["End"]
-
-    dx_mm = (pt_end.X - pt_start.X) * 304.8    # convert to mm
-    dy_mm = (pt_end.Y - pt_start.Y) * 304.8    # convert to mm
-    length_mm = math.sqrt(dx_mm**2 + dy_mm**2) # Calculate the true (Euclidean) length of the edge using the X and Y
-                                                # coordinate differences (Pythagorean theorem). Works for walls at any angle.
-
-# TODO - Consider storing curve length during package_track().
-# At that point the original Curve object is still available, so c.Length could
-# be converted to mm and stored in the package dictionary, avoiding the need to
-# recalculate length later from Start/End XYZ points.
-
-# below block calculates end condition of each curve using cross product z and direction
-
-    # START CONDITION
-    # If this is the first edge in an open run, there is no previous wall segment forming a corner,
-    # so the start point is an open end.
-    if i == 0 and not is_closed_loop_layout:
-        start_is_external = False 
-        start_is_open = True
-        print("Start condition : OPEN END")
-
-    # Calculates the turn through the corner where the previous edge meets the start of the current edge.
-    else:
-        edge_prev = ordered_data[(i - 1) % num_edges]
-
-        # Turn from previous edge into current edge
-        cp_start_z = cross_product_z(edge_prev["Start"], edge_prev["End"], pt_end)
-
-        # cp_start_z > 0 means the path turns LEFT.
-        # Since outside is on the LEFT, a LEFT turn is INTERNAL.
-        if cp_start_z < 0:
-            start_is_external = True
-        else:
-            start_is_external = False
-
-        start_is_open = False
-
-        print("cp_start_z       :", cp_start_z)
-        print("start_external   :", start_is_external)
-
-    # END CONDITION
-    # If this is the last edge in an open run, there is no following wall segment forming a corner,
-    # so the end point is an open end.
-    if i == num_edges - 1 and not is_closed_loop_layout:
-        end_is_external = False
-        end_is_open = True
-        print("End condition   : OPEN END")
-
-    # Calculates the turn through the corner where the current edge meets the next edge.
-    else:
-        edge_next = ordered_data[(i + 1) % num_edges]
-
-        # Turn from current edge into next edge
-        cp_end_z = cross_product_z(pt_start, pt_end, edge_next["End"])
-
-        # cp_end_z > 0 means the path turns LEFT.
-        # Since outside is on the LEFT, a LEFT turn is INTERNAL.
-        if cp_end_z < 0:
-            end_is_external = True
-        else:
-            end_is_external = False
-
-        end_is_open = False
-
-        print("cp_end_z         :", cp_end_z)
-        print("end_external     :", end_is_external)
-
-    # BRICK CONDITION
-    if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
-        if num_edges == 1: brick_condition = "Co-" 
-        elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
-        else: brick_condition = "Co-" if start_is_external else "Co"
-    else:
-        if start_is_external and end_is_external: brick_condition = "Co-"   
-        elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
-        else: brick_condition = "Co+"   
-
-    print("Brick condition  :", brick_condition)    
-
-    wall_info = {
-        "Wall Object": edge_curr["Wall"], # Injects physical wall object reference safely into data map
-        "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
-                        (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
-        "Length": length_mm,
-        "Condition": brick_condition
-    }
-    EDGES.append(wall_info)
+EDGES = classify_brick_conditions(ordered_data, is_closed_loop_layout)
 
 # ==============================================================================
 # G. RESIZE LENGTH 

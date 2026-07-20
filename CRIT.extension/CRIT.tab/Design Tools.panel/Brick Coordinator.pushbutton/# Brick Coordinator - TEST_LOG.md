@@ -2,64 +2,72 @@
 
 ---
 
-# Commit 016
+# Commit 018
 
 ---
 
 ## Git Commit #
 
-017
+018
 
 ---
 
 ## Commit Message
 
-Remove duplicate ordered edge representation
+Extract brick condition classification into helper function
 
 ---
 
 ## Change Made
 
-Simplified the data flow between Parts E and F by removing the redundant ordered list.
+Continued the architectural refactor by extracting the complete brick-condition classification process from Part F into a dedicated helper function.
 
-Previously Part E produced two parallel representations of the same ordered wall-track data:
+Created the new function:
 
-- ordered_data — a list of dictionaries containing the matched Revit Wall element together with each edge's Start and End points.
-- ordered — a second list containing only (Start, End) tuples extracted from ordered_data.
+classify_brick_conditions(
+    ordered_data,
+    is_closed_loop_layout
+)
 
-Part F has been updated to operate directly on ordered_data throughout.
+The function now performs the complete corner analysis and brick-condition assignment process by:
 
-The following changes were made:
+- accepting the ordered wall-track data produced by sort_packaged_track();
+- accepting the previously determined open/closed layout classification from Part C;
+- determining the number of ordered edges;
+- calculating the length of each wall-track segment;
+- evaluating the start and end corner conditions for each edge using cross-product analysis;
+- assigning the appropriate brick coordination condition (Co+, Co, or Co-);
+- packaging the resulting wall information into the data structure required by Part G;
+- returning the completed collection of classified edge records.
 
-- removed creation of the intermediate ordered list;
-- updated edge count calculations to use ordered_data;
-- updated first and last point retrieval to reference the Start and End values stored within ordered_data;
-- updated current, previous and next edge access to use dictionary values rather than tuple indexing;
-- updated cross-product calculations to reference the Start and End values directly from each edge dictionary;
-- preserved the existing brick-condition algorithm and corner-classification logic;
-- retained identical outputs by continuing to build the same EDGES data structure for Part G.
+The existing cross_product_z() helper was retained as a shared helper function within the helper-functions section.
 
-No functional behaviour was intentionally changed.
+The inline implementation previously contained within Part F was replaced with the single function call:
+
+EDGES = classify_brick_conditions(
+    ordered_data,
+    is_closed_loop_layout
+)
+
+The previous duplicate verification of the wall layout type was also removed. The helper now receives the existing is_closed_loop_layout value determined earlier in Part C rather than recalculating it.
+
+No changes were made to the corner-classification algorithm, brick-condition logic, or returned data structure.
+
+The existing implementation was intentionally preserved during extraction to ensure identical behaviour.
 
 ---
 
 ## Reason for Change
 
-The ordered list duplicated information already contained within ordered_data.
+Part F previously contained an entire processing stage embedded directly within the main workflow.
 
-Maintaining both structures created two parallel representations of the same ordered geometry which always had to remain synchronised.
+Extracting this logic into a dedicated helper separates the high-level workflow from the implementation details of corner classification.
 
-Removing the duplicate representation simplifies the architecture by establishing ordered_data as the single source of truth for ordered wall-track information throughout Part F.
+The main execution flow now describes what the tool is doing rather than how each operation is performed, making the script significantly easier to read and reason about.
 
-The updated implementation is also more self-documenting, as edge geometry is now accessed through descriptive dictionary keys such as:
+Passing the existing is_closed_loop_layout value into the helper also removes duplicated logic and establishes a single source of truth for wall morphology throughout the script.
 
-edge["Start"]
-edge["End"]
-edge["Wall"]
-
-rather than tuple index positions.
-
-This reduces unnecessary data transformation while improving readability and maintainability.
+This continues the architectural pattern established during the earlier extraction of Parts C, D and E.
 
 ---
 
@@ -126,7 +134,7 @@ Wall repositioning successful.
 
 ## Overall Result
 
-Removing the intermediate ordered collection produced no behavioural changes.
+Extracting the brick-condition classification process into a dedicated helper function produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
@@ -136,31 +144,23 @@ All six standard regression tests continue to pass, confirming that:
 - brick resizing remains unchanged;
 - physical wall repositioning remains unchanged.
 
-Part F now operates from a single ordered data structure:
+The main workflow now delegates Part F to a single high-level helper function, improving readability while preserving the existing implementation.
 
-ordered_data
-
-rather than maintaining two parallel representations of the same geometry.
-
-This establishes a cleaner architectural boundary between Parts E and F and prepares Part F for extraction into a dedicated helper function.
+This continues the transition from a large procedural script towards a workflow composed of clearly defined processing stages.
 
 ---
 
 ## Next Change / Hypothesis
 
-Extract Part F into a dedicated helper function while preserving its existing algorithm.
+Review the internal structure of classify_brick_conditions() to determine whether it contains further separable responsibilities.
 
-The proposed function contract is:
+Potential candidates include:
 
-def classify_brick_conditions(
-    ordered_data,
-    is_closed_loop_layout
-):
-    return EDGES
+- determining start and end corner conditions;
+- assigning brick coordination conditions from those corner states;
+- packaging the classified edge data for downstream processing.
 
-The initial extraction should preserve the current implementation without modifying the internal algorithm.
-
-Potential internal helper functions (such as cross-product calculation or corner-condition determination) should be evaluated only after the high-level Part F extraction has been completed and verified against the existing regression tests.
+These should only be extracted if doing so improves cohesion without obscuring the overall classification algorithm.
 
 
 
