@@ -476,10 +476,6 @@ else:
 # Sort selected track cleanly
 ordered_data = sort_packaged_track(raw_side)
 
-# Extract the sorted endpoints required downstream for calculation matrices
-ordered = [(item["Start"], item["End"]) for item in ordered_data]
-
-
 
 # PRINT DIAGNOSTIC
 print("\n===== SORTED TRACK =====")
@@ -545,14 +541,13 @@ for i, edge in enumerate(ordered_data):
 #
 # 'ordered_data' contains a sequentially ordered list of dictionaries.
 # Each dictionary stores the matched Wall element plus the Start and End XYZ points.
-#
-# 'ordered' contains the same sequence stripped down to Start/End XYZ pairs only.
 
-num_edges = len(ordered)
+
+num_edges = len(ordered_data)
 EDGES = []
 
-first_point = ordered[0][0]
-last_point = ordered[-1][1]
+first_point = ordered_data[0]["Start"]
+last_point = ordered_data[-1]["End"]
 is_closed_loop_layout = same(first_point, last_point) 
 
 # TODO - Review whether this closed-loop check is still required.
@@ -587,9 +582,9 @@ print("Therefore  : RIGHT turn = external corner")
 
 # Calculate length of curve
 for i in range(num_edges):
-    edge_curr = ordered[i]
-    pt_start = edge_curr[0]
-    pt_end = edge_curr[1]
+    edge_curr = ordered_data[i]
+    pt_start = edge_curr["Start"]
+    pt_end = edge_curr["End"]
 
     dx_mm = (pt_end.X - pt_start.X) * 304.8    # convert to mm
     dy_mm = (pt_end.Y - pt_start.Y) * 304.8    # convert to mm
@@ -613,10 +608,10 @@ for i in range(num_edges):
 
     # Calculates the turn through the corner where the previous edge meets the start of the current edge.
     else:
-        edge_prev = ordered[(i - 1) % num_edges]
+        edge_prev = ordered_data[(i - 1) % num_edges]
 
         # Turn from previous edge into current edge
-        cp_start_z = cross_product_z(edge_prev[0], edge_prev[1], pt_end)
+        cp_start_z = cross_product_z(edge_prev["Start"], edge_prev["End"], pt_end)
 
         # cp_start_z > 0 means the path turns LEFT.
         # Since outside is on the LEFT, a LEFT turn is INTERNAL.
@@ -640,10 +635,10 @@ for i in range(num_edges):
 
     # Calculates the turn through the corner where the current edge meets the next edge.
     else:
-        edge_next = ordered[(i + 1) % num_edges]
+        edge_next = ordered_data[(i + 1) % num_edges]
 
         # Turn from current edge into next edge
-        cp_end_z = cross_product_z(pt_start, pt_end, edge_next[1])
+        cp_end_z = cross_product_z(pt_start, pt_end, edge_next["End"])
 
         # cp_end_z > 0 means the path turns LEFT.
         # Since outside is on the LEFT, a LEFT turn is INTERNAL.
@@ -670,7 +665,7 @@ for i in range(num_edges):
     print("Brick condition  :", brick_condition)    
 
     wall_info = {
-        "Wall Object": ordered_data[i]["Wall"], # Injects physical wall object reference safely into data map
+        "Wall Object": edge_curr["Wall"], # Injects physical wall object reference safely into data map
         "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
                         (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
         "Length": length_mm,

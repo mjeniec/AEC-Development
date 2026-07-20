@@ -8,73 +8,58 @@
 
 ## Git Commit #
 
-016
+017
 
 ---
 
 ## Commit Message
 
-Extract packaged track sorting into helper function
+Remove duplicate ordered edge representation
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor of the Brick Coordinator by extracting the remaining logical responsibility within Part E into a dedicated helper function.
+Simplified the data flow between Parts E and F by removing the redundant ordered list.
 
-Created the new function:
+Previously Part E produced two parallel representations of the same ordered wall-track data:
 
-sort_packaged_track(raw_edges_list)
+- ordered_data — a list of dictionaries containing the matched Revit Wall element together with each edge's Start and End points.
+- ordered — a second list containing only (Start, End) tuples extracted from ordered_data.
 
-The function now performs the complete packaged-track sorting process by:
+Part F has been updated to operate directly on ordered_data throughout.
 
-- accepting the list of packaged wall-track dictionaries produced by package_track();
-- copying the input list so the original packaged data is not directly modified;
-- selecting an initial edge;
-- comparing remaining edge start and end points against the current endpoint;
-- reversing edge direction where required so connected edges follow a consistent sequence;
-- building a continuous ordered list of packaged wall-track dictionaries;
-- appending any remaining unsorted edges through the existing fallback behaviour;
-- returning the ordered list.
+The following changes were made:
 
-The inline sorting implementation previously contained within Part E was moved into the helper-functions section.
+- removed creation of the intermediate ordered list;
+- updated edge count calculations to use ordered_data;
+- updated first and last point retrieval to reference the Start and End values stored within ordered_data;
+- updated current, previous and next edge access to use dictionary values rather than tuple indexing;
+- updated cross-product calculations to reference the Start and End values directly from each edge dictionary;
+- preserved the existing brick-condition algorithm and corner-classification logic;
+- retained identical outputs by continuing to build the same EDGES data structure for Part G.
 
-The previous two-step assignment:
-
-sorted_side = sort_packaged_track(raw_side)
-ordered_data = sorted_side
-
-was simplified to:
-
-ordered_data = sort_packaged_track(raw_side)
-
-The point-comparison helper was also consolidated into a single shared definition:
-
-TOL = 0.05
-
-def same(p1, p2):
-    return p1.DistanceTo(p2) < TOL
-
-No changes were made to the track-sorting algorithm, endpoint comparison behaviour, or fallback handling.
-
-The existing implementation was intentionally preserved during extraction to ensure identical behaviour.
+No functional behaviour was intentionally changed.
 
 ---
 
 ## Reason for Change
 
-Part E performs two distinct responsibilities:
+The ordered list duplicated information already contained within ordered_data.
 
-1. associating selected boundary curves with their corresponding Revit wall elements;
-2. sorting those packaged curve-and-wall records into a continuous ordered sequence.
+Maintaining both structures created two parallel representations of the same ordered geometry which always had to remain synchronised.
 
-The first responsibility was extracted into package_track() in Commit 015.
+Removing the duplicate representation simplifies the architecture by establishing ordered_data as the single source of truth for ordered wall-track information throughout Part F.
 
-This commit completes the functional extraction of Part E by isolating the second responsibility within sort_packaged_track().
+The updated implementation is also more self-documenting, as edge geometry is now accessed through descriptive dictionary keys such as:
 
-Removing the intermediate sorted_side variable also simplifies the data flow by assigning the function result directly to the variable used by downstream processing.
+edge["Start"]
+edge["End"]
+edge["Wall"]
 
-Consolidating the tolerance and point-comparison helper into a single definition creates one source of truth for endpoint matching and prevents later function definitions from silently replacing earlier ones.
+rather than tuple index positions.
+
+This reduces unnecessary data transformation while improving readability and maintainability.
 
 ---
 
@@ -141,43 +126,41 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The new sort_packaged_track() helper function has been verified to produce identical behaviour to the previous inline implementation.
+Removing the intermediate ordered collection produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
-- packaged edges are still sorted into the correct continuous sequence;
-- reversed edge directions are handled correctly;
-- downstream corner classification remains unchanged;
+- ordered wall-track geometry is still processed correctly;
+- corner classification remains unchanged;
+- brick-condition assignment remains unchanged;
 - brick resizing remains unchanged;
 - physical wall repositioning remains unchanged.
 
-Part E is now functionally separated into two clear responsibilities:
+Part F now operates from a single ordered data structure:
 
-raw_side = package_track(...)
-ordered_data = sort_packaged_track(raw_side)
+ordered_data
 
-This completes the initial function-extraction refactor of Part E and further improves the readability of the main workflow.
+rather than maintaining two parallel representations of the same geometry.
+
+This establishes a cleaner architectural boundary between Parts E and F and prepares Part F for extraction into a dedicated helper function.
 
 ---
 
 ## Next Change / Hypothesis
 
-Continue the architectural refactor with Part F (Corner Classification).
+Extract Part F into a dedicated helper function while preserving its existing algorithm.
 
-Before extracting Part F, identify its distinct responsibilities, required inputs and returned outputs.
+The proposed function contract is:
 
-Part F currently appears to:
+def classify_brick_conditions(
+    ordered_data,
+    is_closed_loop_layout
+):
+    return EDGES
 
-- determine the number of ordered edges;
-- determine or verify whether the layout is open or closed;
-- calculate local cross products at edge junctions;
-- classify each edge’s start and end condition;
-- assign the appropriate brick condition;
-- build the EDGES data structure required by Part G.
+The initial extraction should preserve the current implementation without modifying the internal algorithm.
 
-The next step should first determine whether all of this represents one responsibility or whether Part F should be divided into smaller helper functions.
-
-The existing note regarding the redundant closed-loop check should remain unresolved during the initial extraction unless removing it is handled as a separate, controlled change.
+Potential internal helper functions (such as cross-product calculation or corner-condition determination) should be evaluated only after the high-level Part F extraction has been completed and verified against the existing regression tests.
 
 
 
