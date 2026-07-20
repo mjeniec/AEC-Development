@@ -381,6 +381,19 @@ def cross_product_z(p1, p2, p3):
     v2_y = p3.Y - p2.Y
     return (v1_x * v2_y) - (v1_y * v2_x)
 
+def determine_brick_condition(edge_index, num_edges, is_closed_loop_layout, start_is_external, end_is_external):
+
+    if (edge_index == 0 or edge_index == num_edges - 1) and not is_closed_loop_layout:
+        if num_edges == 1: brick_condition = "Co-" 
+        elif edge_index == 0: brick_condition = "Co-" if end_is_external else "Co"
+        else: brick_condition = "Co-" if start_is_external else "Co"
+    else:
+        if start_is_external and end_is_external: brick_condition = "Co-"   
+        elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
+        else: brick_condition = "Co+"   
+
+    return brick_condition
+
 def classify_brick_conditions(ordered_data, is_closed_loop_layout):
 
     num_edges = len(ordered_data)
@@ -465,24 +478,13 @@ def classify_brick_conditions(ordered_data, is_closed_loop_layout):
             print("cp_end_z         :", cp_end_z)
             print("end_external     :", end_is_external)
 
-        # BRICK CONDITION
-        if (i == 0 or i == num_edges - 1) and not is_closed_loop_layout:
-            if num_edges == 1: brick_condition = "Co-" 
-            elif i == 0: brick_condition = "Co-" if end_is_external else "Co"
-            else: brick_condition = "Co-" if start_is_external else "Co"
-        else:
-            if start_is_external and end_is_external: brick_condition = "Co-"   
-            elif (start_is_external and not end_is_external) or (not start_is_external and end_is_external): brick_condition = "Co"    
-            else: brick_condition = "Co+"   
-
-        print("Brick condition  :", brick_condition)    
-
+   
         wall_info = {
             "Wall Object": edge_curr["Wall"], # Injects physical wall object reference safely into data map
             "Points List": [(pt_start.X * 304.8, pt_start.Y * 304.8, pt_start.Z * 304.8), 
                             (pt_end.X * 304.8, pt_end.Y * 304.8, pt_end.Z * 304.8)],
             "Length": length_mm,
-            "Condition": brick_condition
+            "Condition": determine_brick_condition(i, num_edges, is_closed_loop_layout, start_is_external, end_is_external)   
         }
         edges.append(wall_info)
 

@@ -2,72 +2,71 @@
 
 ---
 
-# Commit 018
+# Commit 019
 
 ---
 
 ## Git Commit #
 
-018
+019
 
 ---
 
 ## Commit Message
 
-Extract brick condition classification into helper function
+Extract brick condition determination helper
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor by extracting the complete brick-condition classification process from Part F into a dedicated helper function.
+Continued the architectural refactor of Part F by extracting the brick-condition assignment logic into a dedicated helper function.
 
-Created the new function:
+Created the new helper:
 
-classify_brick_conditions(
-    ordered_data,
-    is_closed_loop_layout
+determine_brick_condition(
+    edge_index,
+    num_edges,
+    is_closed_loop_layout,
+    start_is_external,
+    end_is_external
 )
 
-The function now performs the complete corner analysis and brick-condition assignment process by:
+The helper now performs the complete brick-condition selection process by:
 
-- accepting the ordered wall-track data produced by sort_packaged_track();
-- accepting the previously determined open/closed layout classification from Part C;
-- determining the number of ordered edges;
-- calculating the length of each wall-track segment;
-- evaluating the start and end corner conditions for each edge using cross-product analysis;
-- assigning the appropriate brick coordination condition (Co+, Co, or Co-);
-- packaging the resulting wall information into the data structure required by Part G;
-- returning the completed collection of classified edge records.
+- determining whether the current wall is positioned at the end of an open wall run or forms part of the standard corner-processing logic;
+- applying the special brick coordination rules for the first and last walls of open wall layouts;
+- applying the standard corner-based brick coordination rules for closed loops and intermediate walls;
+- returning the appropriate brick coordination condition (Co-, Co, or Co+) to the calling function.
 
-The existing cross_product_z() helper was retained as a shared helper function within the helper-functions section.
+The inline brick-condition assignment previously contained within classify_brick_conditions() was replaced with the helper call:
 
-The inline implementation previously contained within Part F was replaced with the single function call:
-
-EDGES = classify_brick_conditions(
-    ordered_data,
-    is_closed_loop_layout
+brick_condition = determine_brick_condition(
+    edge_index,
+    num_edges,
+    is_closed_loop_layout,
+    start_is_external,
+    end_is_external
 )
 
-The previous duplicate verification of the wall layout type was also removed. The helper now receives the existing is_closed_loop_layout value determined earlier in Part C rather than recalculating it.
+The helper preserves the existing decision logic exactly as implemented previously.
 
-No changes were made to the corner-classification algorithm, brick-condition logic, or returned data structure.
-
-The existing implementation was intentionally preserved during extraction to ensure identical behaviour.
+No behavioural changes were made to the brick coordination algorithm.
 
 ---
 
 ## Reason for Change
 
-Part F previously contained an entire processing stage embedded directly within the main workflow.
+classify_brick_conditions() previously performed several separate responsibilities:
 
-Extracting this logic into a dedicated helper separates the high-level workflow from the implementation details of corner classification.
+- calculating wall lengths;
+- determining corner conditions;
+- selecting correct brick conditions;
+- packaging wall data.
 
-The main execution flow now describes what the tool is doing rather than how each operation is performed, making the script significantly easier to read and reason about.
+Extracting the selection of brick conditions into its own helper gives that decision process a clearly defined responsibility while reducing the size and complexity of the main classification function.
 
-Passing the existing is_closed_loop_layout value into the helper also removes duplicated logic and establishes a single source of truth for wall morphology throughout the script.
-
-This continues the architectural pattern established during the earlier extraction of Parts C, D and E.
+This continues the incremental architectural refactor by separating individual processing responsibilities without modifying the underlying algorithm.
 
 ---
 
@@ -134,33 +133,24 @@ Wall repositioning successful.
 
 ## Overall Result
 
-Extracting the brick-condition classification process into a dedicated helper function produced no behavioural changes.
+Extracting the brick-condition determination into a dedicated helper function produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
-- ordered wall-track geometry is still processed correctly;
 - corner classification remains unchanged;
 - brick-condition assignment remains unchanged;
-- brick resizing remains unchanged;
+- wall resizing remains unchanged;
 - physical wall repositioning remains unchanged.
 
-The main workflow now delegates Part F to a single high-level helper function, improving readability while preserving the existing implementation.
-
-This continues the transition from a large procedural script towards a workflow composed of clearly defined processing stages.
+The responsibility for selecting the appropriate brick coordination condition is now isolated within a dedicated helper function, making classify_brick_conditions() easier to read while preserving the existing implementation.
 
 ---
 
 ## Next Change / Hypothesis
 
-Review the internal structure of classify_brick_conditions() to determine whether it contains further separable responsibilities.
+Review the remaining responsibilities within classify_brick_conditions() to determine whether further extraction is appropriate.
 
-Potential candidates include:
-
-- determining start and end corner conditions;
-- assigning brick coordination conditions from those corner states;
-- packaging the classified edge data for downstream processing.
-
-These should only be extracted if doing so improves cohesion without obscuring the overall classification algorithm.
+The most likely remaining candidate is the repeated logic used to determine the start and end corner conditions for each wall segment. If extracted carefully, this could further simplify the main classification loop while preserving the existing corner-classification algorithm.
 
 
 
