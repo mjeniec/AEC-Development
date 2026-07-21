@@ -493,6 +493,17 @@ def classify_brick_conditions(ordered_data, is_closed_loop_layout):
 
     return edges
 
+def resize(length, condition):
+    if condition == "Co-": grid_length = length + 10
+    elif condition == "Co+": grid_length = length - 10
+    else: grid_length = length
+
+    half_brick_units = round(grid_length / 112.5) 
+
+    if condition == "Co-": return (half_brick_units * 112.5 - 10)
+    elif condition == "Co+": return (half_brick_units * 112.5 + 10)
+    else: return (half_brick_units * 112.5)
+
 # ==============================================================================
 # A. SETUP AND VALIDATION
 # ==============================================================================
@@ -608,62 +619,62 @@ else:
 ordered_data = sort_packaged_track(raw_side)
 
 
+# # PRINT DIAGNOSTIC
+# print("\n===== SORTED TRACK =====")
+
+# for i, edge in enumerate(ordered_data):
+
+#     wall = edge["Wall"]
+#     start = edge["Start"]
+#     end = edge["End"]
+
+#     print("\nEdge {}".format(i))
+#     print("Element ID :", wall.Id)
+#     print("Flipped    :", wall.Flipped)
+#     print("Start      : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
+#     print("End        : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
+
+
 # PRINT DIAGNOSTIC
-print("\n===== SORTED TRACK =====")
+# print("\n===== OUTSIDE SIDE TEST =====")
 
-for i, edge in enumerate(ordered_data):
+# print("User selected Side A :", user_selection_is_side_a)
+# print("Testing selected exterior track only")
 
-    wall = edge["Wall"]
-    start = edge["Start"]
-    end = edge["End"]
+# half_thickness_feet = wall_thickness_feet / 2.0
 
-    print("\nEdge {}".format(i))
-    print("Element ID :", wall.Id)
-    print("Flipped    :", wall.Flipped)
-    print("Start      : ({:.1f}, {:.1f})".format(start.X * 304.8, start.Y * 304.8))
-    print("End        : ({:.1f}, {:.1f})".format(end.X * 304.8, end.Y * 304.8))
+# for i, edge in enumerate(ordered_data):
+#     wall = edge["Wall"]
+#     start = edge["Start"]
+#     end = edge["End"]
 
+#     track_dir = (end - start).Normalize()
+#     left_vec = XYZ(-track_dir.Y, track_dir.X, 0.0)
+#     right_vec = -left_vec
 
-# PRINT DIAGNOSTIC
-print("\n===== OUTSIDE SIDE TEST =====")
+#     mid = XYZ(
+#         (start.X + end.X) / 2.0,
+#         (start.Y + end.Y) / 2.0,
+#         (start.Z + end.Z) / 2.0
+#     )
 
-print("User selected Side A :", user_selection_is_side_a)
-print("Testing selected exterior track only")
+#     test_left = mid + (left_vec * half_thickness_feet)
+#     test_right = mid + (right_vec * half_thickness_feet)
 
-half_thickness_feet = wall_thickness_feet / 2.0
+#     dist_left = wall.Location.Curve.Distance(test_left)
+#     dist_right = wall.Location.Curve.Distance(test_right)
 
-for i, edge in enumerate(ordered_data):
-    wall = edge["Wall"]
-    start = edge["Start"]
-    end = edge["End"]
+#     print("\nEdge {}".format(i))
+#     print("Wall flipped :", wall.Flipped)
+#     print("Left test distance to wall centreline  : {:.4f}".format(dist_left))
+#     print("Right test distance to wall centreline : {:.4f}".format(dist_right))
 
-    track_dir = (end - start).Normalize()
-    left_vec = XYZ(-track_dir.Y, track_dir.X, 0.0)
-    right_vec = -left_vec
-
-    mid = XYZ(
-        (start.X + end.X) / 2.0,
-        (start.Y + end.Y) / 2.0,
-        (start.Z + end.Z) / 2.0
-    )
-
-    test_left = mid + (left_vec * half_thickness_feet)
-    test_right = mid + (right_vec * half_thickness_feet)
-
-    dist_left = wall.Location.Curve.Distance(test_left)
-    dist_right = wall.Location.Curve.Distance(test_right)
-
-    print("\nEdge {}".format(i))
-    print("Wall flipped :", wall.Flipped)
-    print("Left test distance to wall centreline  : {:.4f}".format(dist_left))
-    print("Right test distance to wall centreline : {:.4f}".format(dist_right))
-
-    if dist_left < dist_right:
-        print("Wall core is on LEFT of selected track")
-        print("Therefore OUTSIDE is on RIGHT")
-    else:
-        print("Wall core is on RIGHT of selected track")
-        print("Therefore OUTSIDE is on LEFT")
+#     if dist_left < dist_right:
+#         print("Wall core is on LEFT of selected track")
+#         print("Therefore OUTSIDE is on RIGHT")
+#     else:
+#         print("Wall core is on RIGHT of selected track")
+#         print("Therefore OUTSIDE is on LEFT")
 # ==============================================================================
 # F. AUTOMATIC VECTOR CORNER ANALYSIS & BRICK CONDITION ASSIGNMENT
 # =================================================================================
@@ -683,29 +694,6 @@ EDGES = classify_brick_conditions(ordered_data, is_closed_loop_layout)
 #
 # EDGES Dictionary contains: wall object, points list, length and condition for each wall segment
 
-
-def resize(length, condition):
-    if condition == "Co-": grid_length = length + 10
-    elif condition == "Co+": grid_length = length - 10
-    else: grid_length = length
-
-    half_brick_units = round(grid_length / 112.5) 
-
-    if condition == "Co-": return (half_brick_units * 112.5 - 10)
-    if condition == "Co+": return (half_brick_units * 112.5 + 10)
-    if condition == "Co": return (half_brick_units * 112.5)
-
-# Create a safe copy of the EDGES matrix without attempting to deepcopy Revit API Wall elements (doesn't work!)
-# Create a second copy of the edge data.
-#
-# We do NOT use deepcopy() because the Revit Wall objects cannot safely be deep copied.
-# We only need a new copy of the data that will be modified
-# (points, lengths, conditions), while keeping references
-# to the original Revit Wall objects.
-#
-# Learn more about Python references later.
-
-
 EDGES_copy = []
 for edge in EDGES:
     EDGES_copy.append({
@@ -715,53 +703,35 @@ for edge in EDGES:
         "Condition": edge["Condition"]
     })
 
-# Resize leading segment (Segment 0)
-EDGES_copy[0]["Length"] = resize(EDGES[0]["Length"], EDGES[0]["Condition"])
-start_pt = EDGES_copy[0]["Points List"][0] # (x, y, z)
-end_pt = EDGES[0]["Points List"][1] # (x, y, z)
-dx = end_pt[0] - start_pt[0] # x end - x start
-dy = end_pt[1] - start_pt[1] # y end - y start
-# dx and dy describe the original edge's direction vector.
-# Their magnitude gives the distance travelled along each axis.
-# Their sign (+/-) gives the direction of travel.
 
-if abs(dx) > abs(dy): # Edge is horizontal (X direction)
-    direction = 1.0 if dx > 0 else -1.0 # check if direction is positive or negative and store 
-    new_end_x = start_pt[0] + (EDGES_copy[0]["Length"] * direction) # calculate new end point x coordinate using resized length
-    EDGES_copy[0]["Points List"][1] = (new_end_x, start_pt[1], start_pt[2]) # update only the x coordinate of the end point (rebuild using start point coordinates as safer!)
+for i in range(len(EDGES_copy)):
 
-else: # edge is vertical (Y direction)
-    direction = 1.0 if dy > 0 else -1.0 # check if direction is positive or negative and store 
-    new_end_y = start_pt[1] + (EDGES_copy[0]["Length"] * direction) # calculate new end point y coordinate using resized length
-    EDGES_copy[0]["Points List"][1] = (start_pt[0], new_end_y, start_pt[2]) # update only the y coordinate of the end point (rebuild using start point coordinates as safer!)
+    if i == 0:
+        current_start = EDGES[i]["Points List"][0]
+    else:
+        current_start = prev_end_pt
 
-prev_end_pt = EDGES_copy[0]["Points List"][1] # (x, y, z)
+    EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"])
 
+    new_length = EDGES_copy[i]["Length"] 
 
-for i in range(1, len(EDGES_copy)): # loop through remaining edges 
-    EDGES_copy[i]["Points List"][0] = prev_end_pt # update the current edge's start point with previous edge's end point
-    EDGES_copy[i]["Length"] = resize(EDGES[i]["Length"], EDGES[i]["Condition"]) # use the original edge's length and condition to calculate the resized length, then store it in EDGES_copy.
+    orig_start = EDGES[i]["Points List"][0]
+    orig_end = EDGES[i]["Points List"][1]
 
-    # TODO REMOVE NOTE - NO LONGER RELEVANT?- CRITICAL FIX: Read the delta vectors directly from the freshly chain-linked coordinates 
-    # instead of the original raw layout array to protect against flipped normal flows.
-    current_start = EDGES_copy[i]["Points List"][0] # (x, y, z) point has been updated to match previous end point
-    orig_end = EDGES[i]["Points List"][1] # (x, y, z) take from EDGES (not edges copy) as we want original direction vector (we moved the current start point to match previous end point)
-    orig_start = EDGES[i]["Points List"][0] # (x, y, z) take from EDGES (not edges copy) as we want original direction vector (we moved the current start point to match previous end point)
+    dx = orig_end[0] - orig_start[0]
+    dy = orig_end[1] - orig_start[1]
 
-    dx = orig_end[0] - orig_start[0] # x end - x start
-    dy = orig_end[1] - orig_start[1] # y end - y start
+    if abs(dx) > abs(dy): # EDGE IS HORIZONTAL
+        direction = 1.0 if dx > 0.0 else -1.0
+        new_end = (current_start[0] + (new_length * direction), current_start[1], current_start[2])
 
-    if abs(dx) > abs(dy): # Edge is horizontal (X direction)
-        direction = 1.0 if dx > 0 else -1.0 # check if direction is positive or negative and store 
-        new_end_x = current_start[0] + (EDGES_copy[i]["Length"] * direction) # calculate new end point x coordinate using resized length
-        EDGES_copy[i]["Points List"][1] = (new_end_x, current_start[1], current_start[2]) # update only the x coordinate of the end point (rebuild using start point coordinates as safer!)
-    
-    else: # Edge is horizontal (Y direction)
-        direction = 1.0 if dy > 0 else -1.0 # check if direction is positive or negative and store 
-        new_end_y = current_start[1] + (EDGES_copy[i]["Length"] * direction) # calculate new end point y coordinate using resized length
-        EDGES_copy[i]["Points List"][1] = (current_start[0], new_end_y, current_start[2]) # update only the y coordinate of the end point (rebuild using start point coordinates as safer!)
+    else: # EDGE IS VERTICAL
+        direction = 1.0 if dy > 0.0 else -1.0
+        new_end = (current_start[0], current_start[1] + (new_length * direction), current_start[2])
 
-    prev_end_pt = EDGES_copy[i]["Points List"][1] # update prev_end_point with current end point. 
+    EDGES_copy[i]["Points List"][0] = current_start
+    EDGES_copy[i]["Points List"][1] = new_end
+    prev_end_pt = new_end
 
 
 # ==============================================================================
@@ -780,7 +750,7 @@ for idx in range(len(EDGES)):
 # f    = format as a floating-point number
 
 # ==============================================================================
-# H: AUTOMATIC PHYSICAL MODEL REPOSITIONING (FLIP-AWARE ENGINE)
+# H: AUTOMATIC PHYSICAL MODEL REPOSITIONING 
 # ==============================================================================
 
 # At this point:

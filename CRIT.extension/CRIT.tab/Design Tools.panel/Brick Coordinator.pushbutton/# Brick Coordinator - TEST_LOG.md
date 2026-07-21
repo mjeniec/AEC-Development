@@ -2,57 +2,49 @@
 
 ---
 
-# Commit 020
+# Commit 021
 
 ---
 
 ## Git Commit #
 
-020
+021
 
 ---
 
 ## Commit Message
 
-Extract corner condition determination helper
+Refactor Part G into unified edge resizing loop
 
 ---
 
 ## Change Made
 
-Continued the architectural refactor of Part F by extracting the corner-classification logic into a dedicated helper function.
+Refactored Part G by replacing the previous separate resizing logic for the first edge and all remaining edges with a single unified resizing algorithm.
 
-Created the new helper:
+Introduced the reusable helper function:
 
-determine_corner_condition(
-    edge_index,
-    is_closed_loop_layout,
-    ordered_data,
-    pt_start,
-    pt_end,
-    num_edges
-)
+resize(length, condition)
 
-The helper now performs the complete corner-condition determination process by:
+which encapsulates the bond-specific wall length adjustment logic for:
 
-- identifying whether the current wall begins or ends at an open wall termination;
-- calculating the turn direction at the start corner using the previous wall segment;
-- calculating the turn direction at the end corner using the following wall segment;
-- determining whether each corner is classified as external or internal based on the cross-product result;
-- returning the start and end corner classifications to the calling function.
+- Co
+- Co+
+- Co-
 
-The inline corner-classification logic previously contained within classify_brick_conditions() was replaced with the helper call:
+The resizing process now follows a single algorithm for every edge:
 
-start_is_external, end_is_external = determine_corner_condition(
-    edge_index,
-    is_closed_loop_layout,
-    ordered_data,
-    pt_start,
-    pt_end,
-    num_edges
-)
+- determine the current start point;
+- resize the wall length using the helper function;
+- determine the original wall direction from the unmodified geometry;
+- preserve the original horizontal or vertical orientation;
+- calculate the new endpoint using the resized length;
+- update the copied edge geometry;
+- pass the new endpoint to the following edge.
 
-The helper preserves the existing corner-classification algorithm exactly as implemented previously.
+The duplicated "first edge" and "remaining edges" implementations were removed entirely.
+
+The helper function was also relocated to the helper function section of the script to separate reusable logic from the main algorithm.
 
 No behavioural changes were made to the brick coordination algorithm.
 
@@ -60,16 +52,21 @@ No behavioural changes were made to the brick coordination algorithm.
 
 ## Reason for Change
 
-classify_brick_conditions() previously performed several separate responsibilities:
+The previous implementation contained two separate resizing algorithms:
 
-- calculating wall lengths;
-- determining corner conditions;
-- selecting correct brick conditions;
-- packaging wall data.
+- one for the first edge;
+- one for all subsequent edges.
 
-Extracting the determination of corner conditions into its own helper gives that geometric decision process a clearly defined responsibility while further reducing the size and complexity of the main classification function.
+Although both performed essentially the same operation, they duplicated large portions of logic and required both sections to be maintained together.
 
-This continues the staged architectural refactor by separating individual processing responsibilities without modifying the underlying algorithm.
+The refactored implementation recognises that every edge follows the same resizing process. The only difference is the source of the starting point:
+
+- the first edge begins at its original start point;
+- every subsequent edge begins at the previous resized endpoint.
+
+By expressing this as a single algorithm, the code is shorter, easier to reason about, and significantly reduces duplicated logic while preserving identical behaviour.
+
+Separating the bond-specific resizing calculations into the resize() helper further improves readability by isolating a single reusable responsibility.
 
 ---
 
@@ -136,31 +133,25 @@ Wall repositioning successful.
 
 ## Overall Result
 
-Extracting the corner-condition determination into a dedicated helper function produced no behavioural changes.
+The unified resizing algorithm produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
-- corner classification remains unchanged;
+- wall lengths remain identical;
+- wall directions are preserved;
+- chained edge positioning remains correct;
 - brick-condition assignment remains unchanged;
-- wall resizing remains unchanged;
 - physical wall repositioning remains unchanged.
 
-The responsibility for determining the start and end corner classifications is now isolated within a dedicated helper function, making classify_brick_conditions() simpler to read while preserving the existing implementation.
+The resizing process is now implemented as a single algorithm operating on every edge rather than maintaining separate implementations for the first and subsequent edges.
 
 ---
 
 ## Next Change / Hypothesis
 
-Review the remaining responsibilities within classify_brick_conditions() to determine whether further extraction is appropriate.
+Review the remaining duplicated logic throughout the script to identify further opportunities to extract complete behaviours into reusable functions.
 
-The remaining function now primarily:
-
-- calculates wall lengths;
-- delegates corner classification;
-- delegates brick-condition selection;
-- packages the processed wall data.
-
-The next stage of the refactor should focus on identifying whether any of these remaining responsibilities can be extracted without making the code less readable. At this stage, further extractions should continue only where they improve clarity by encapsulating a complete piece of behaviour rather than simply reducing the number of lines of code.
+Future refactoring should continue to focus on improving the architectural structure of the code by reducing duplicated algorithms and ensuring that each helper function encapsulates a single well-defined responsibility, while preserving the existing behaviour through regression testing.
 
 
 
