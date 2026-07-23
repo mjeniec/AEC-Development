@@ -2,71 +2,64 @@
 
 ---
 
-# Commit 021
+# Commit 022
 
 ---
 
 ## Git Commit #
 
-021
+022
 
 ---
 
 ## Commit Message
 
-Refactor Part G into unified edge resizing loop
+Refactor Part H into centreline calculation and wall update helpers
 
 ---
 
 ## Change Made
 
-Refactored Part G by replacing the previous separate resizing logic for the first edge and all remaining edges with a single unified resizing algorithm.
+Refactored Part H by extracting the wall repositioning process into two helper functions with clearly defined responsibilities.
 
-Introduced the reusable helper function:
+Introduced the helper functions:
 
-resize(length, condition)
+calculate_target_centreline(edge_data)
+apply_centreline_to_wall(wall, new_line)
 
-which encapsulates the bond-specific wall length adjustment logic for:
+The centreline calculation helper now performs the complete geometric calculation required to reposition each wall by:
 
-- Co
-- Co+
-- Co-
+- retrieving the original Revit wall and LocationCurve;
+- converting resized edge coordinates from millimetres to feet;
+- calculating the edge direction and perpendicular vector;
+- determining the correct side of the resized edge using two test points and the existing LocationCurve;
+- calculating the new wall centreline;
+- returning a new Revit Line object.
 
-The resizing process now follows a single algorithm for every edge:
+The wall update helper is responsible solely for applying the calculated centreline to the Revit model by:
 
-- determine the current start point;
-- resize the wall length using the helper function;
-- determine the original wall direction from the unmodified geometry;
-- preserve the original horizontal or vertical orientation;
-- calculate the new endpoint using the resized length;
-- update the copied edge geometry;
-- pass the new endpoint to the following edge.
+- setting the wall Location Line reference to Centreline;
+- restoring non-flipped wall orientation where required;
+- updating the wall's LocationCurve.
 
-The duplicated "first edge" and "remaining edges" implementations were removed entirely.
+The main transaction loop now delegates these responsibilities to the helper functions, significantly reducing the complexity of Part H while preserving the existing behaviour.
 
-The helper function was also relocated to the helper function section of the script to separate reusable logic from the main algorithm.
-
-No behavioural changes were made to the brick coordination algorithm.
+Inline comments were also simplified, with function names now expressing much of the program intent.
 
 ---
 
 ## Reason for Change
 
-The previous implementation contained two separate resizing algorithms:
+The original implementation combined geometric calculations and Revit model modifications into a single block of code.
 
-- one for the first edge;
-- one for all subsequent edges.
+Although functionally correct, these represented two distinct responsibilities:
 
-Although both performed essentially the same operation, they duplicated large portions of logic and required both sections to be maintained together.
+- calculating where the wall should be positioned;
+- applying that calculated position to the Revit model.
 
-The refactored implementation recognises that every edge follows the same resizing process. The only difference is the source of the starting point:
+Separating these responsibilities improves readability, makes the overall program flow easier to follow, and allows each helper function to encapsulate a complete behaviour rather than exposing intermediate calculations.
 
-- the first edge begins at its original start point;
-- every subsequent edge begins at the previous resized endpoint.
-
-By expressing this as a single algorithm, the code is shorter, easier to reason about, and significantly reduces duplicated logic while preserving identical behaviour.
-
-Separating the bond-specific resizing calculations into the resize() helper further improves readability by isolating a single reusable responsibility.
+This refactor also completes the first architectural pass over the Brick Coordinator script, with each major stage of the algorithm now represented by smaller, purpose-driven helper functions.
 
 ---
 
@@ -133,25 +126,32 @@ Wall repositioning successful.
 
 ## Overall Result
 
-The unified resizing algorithm produced no behavioural changes.
+The Part H refactor produced no behavioural changes.
 
 All six standard regression tests continue to pass, confirming that:
 
-- wall lengths remain identical;
-- wall directions are preserved;
-- chained edge positioning remains correct;
-- brick-condition assignment remains unchanged;
+- wall centrelines are repositioned correctly;
+- flipped and non-flipped walls behave identically;
+- clockwise and anti-clockwise loops remain consistent;
+- open and closed wall runs continue to produce identical results;
 - physical wall repositioning remains unchanged.
 
-The resizing process is now implemented as a single algorithm operating on every edge rather than maintaining separate implementations for the first and subsequent edges.
+The wall repositioning stage is now separated into distinct geometric calculation and Revit model update responsibilities, improving the overall architecture without altering functionality.
 
 ---
 
 ## Next Change / Hypothesis
 
-Review the remaining duplicated logic throughout the script to identify further opportunities to extract complete behaviours into reusable functions.
+Having completed the first architectural refactor of the entire Brick Coordinator script, the next stage should focus on improving the overall codebase rather than extracting additional helper functions.
 
-Future refactoring should continue to focus on improving the architectural structure of the code by reducing duplicated algorithms and ensuring that each helper function encapsulates a single well-defined responsibility, while preserving the existing behaviour through regression testing.
+Potential areas include:
+
+- reviewing each helper function to simplify interfaces and resolve outstanding TODOs;
+- identifying common utility functions (for example, unit conversions or Revit helpers);
+- improving naming consistency and reducing remaining implementation details;
+- preparing logical groups of helper functions for extraction into separate modules.
+
+The objective is now to refine and organise the architecture rather than perform further structural extraction, while continuing to verify every change using the existing six-case regression test suite.
 
 
 
