@@ -859,7 +859,7 @@ try:
     
 
 except Exception as e:
-    t_move.RollBack()
+    t_move.RollBack() # return to state before try block
     UI.TaskDialog.Show("Execution Error", "Failed to reposition structural walls: {}".format(str(e)))
 
 
