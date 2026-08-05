@@ -2,6 +2,12 @@ from pyrevit import revit, DB
 
 doc = revit.doc 
 
+A3_title_strip_height_mm = 40
+A3_title_strip_height = DB.UnitUtils.ConvertToInternalUnits(A3_title_strip_height_mm, DB.UnitTypeId.Millimeters)
+
+
+
+
 # Find the A3 metric title block type
 titleblock_type = None
 
@@ -38,10 +44,24 @@ with revit.Transaction("Create CRiT Sheet"):
     sheet.SheetNumber = "HIW-UPB-ZZ-00-DR-A-0999"
     sheet.Name = 'CRiT Test Sheet'
 
-    placement_point = DB.XYZ(1,1,0)
+    sheet_bounding_box = sheet.Outline
+
+    u_min = sheet_bounding_box.Min.U
+    u_max = sheet_bounding_box.Max.U
+    v_min = sheet_bounding_box.Min.V
+    v_max = sheet_bounding_box.Max.V
+
+    usable_v_min = v_min + A3_title_strip_height
+
+    u_centre = (u_min + u_max) / 2
+    v_centre = (usable_v_min + v_max) / 2
+
+    placement_point = DB.XYZ(u_centre,v_centre,0)
 
     viewport = DB.Viewport.Create(
         doc, sheet.Id, 
         planning_view.Id, 
         placement_point
     )
+
+

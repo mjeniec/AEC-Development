@@ -2,196 +2,231 @@
 
 ---
 
-# Commit 001
+# Commit 002
 
 ---
 
 ## Git Commit #
 
-001
+002
 
 ---
 
 ## Commit Message
 
-Create test sheet and place existing planning view
+Centre viewport within usable sheet area
 
 ---
 
 ## Change Made
 
-Created the first working pyRevit prototype for CRiT: Sheets.
+Replaced the temporary hard-coded viewport placement coordinate with a calculated placement point based on the dimensions of the newly created sheet.
 
-The script currently:
+The script now retrieves the sheet bounds using:
 
-- retrieves the active Revit document;
-- collects loaded title block types using `FilteredElementCollector`;
-- filters the title block collection to identify the `Title_Blocks_A3_Metric` family;
-- stores the matching title block `FamilySymbol` for use when creating a sheet;
-- collects Revit `View` objects from the current document;
-- searches for the existing view named `Proposed Ground Floor - Planning`;
-- creates a new `ViewSheet` using the selected A3 title block type;
-- assigns the sheet number `HIW-UPB-ZZ-00-DR-A-0999`;
-- assigns the sheet name `CRiT Test Sheet`;
-- creates a `Viewport`;
-- places the existing planning view onto the newly created sheet using an initial test `XYZ` placement point.
+`sheet.Outline`
 
-The Revit modifications are carried out inside a pyRevit transaction using:
+This returns a Revit `BoundingBoxUV` representing the physical extents of the sheet in paper space.
 
-`with revit.Transaction("Create CRiT Sheet")`
+The minimum and maximum sheet coordinates are retrieved using:
 
-This provides the first complete proof-of-concept for automatically creating a sheet and placing an existing view onto it.
+- `Min.U`
+- `Max.U`
+- `Min.V`
+- `Max.V`
+
+The script then calculates the centre of the sheet rather than relying on an arbitrary `XYZ` coordinate.
+
+Initial testing showed that centring the viewport on the entire physical sheet positioned the drawing too low because the calculation 
+included the title strip at the bottom of the A3 title block.
+
+A 40 mm title-strip height was therefore introduced:
+
+`A3_title_strip_height_mm = 40`
+
+The value is converted from millimetres to Revit's internal units using:
+
+`DB.UnitUtils.ConvertToInternalUnits()`
+
+The bottom of the usable drawing region is then calculated as:
+
+`usable_v_min = v_min + A3_title_strip_height`
+
+The centre of the usable drawing area is calculated using:
+
+`u_centre = (u_min + u_max) / 2`
+
+`v_centre = (usable_v_min + v_max) / 2`
+
+These coordinates are used to construct the `XYZ` placement point supplied to `Viewport.Create()`.
+
+The viewport is therefore now positioned automatically relative to the dimensions of the selected sheet rather than using a fixed coordinate.
 
 
 ---
 
 ## Reason for Change
 
-The purpose of this first commit is to establish the minimum working Revit API workflow required by CRiT: Sheets.
+Commit 001 demonstrated that an existing Revit view could successfully be placed onto a newly created sheet, but used the temporary placement point:
 
-Before developing drawing databases, interfaces, automatic view creation or issue-management functionality, the tool first needs to prove that it can programmatically reproduce the basic manual drawing setup process.
+`XYZ(1, 1, 0)`
 
-This commit establishes the relationship between the principal Revit objects involved:
+This caused the viewport to be positioned incorrectly because the coordinate had no relationship to the actual sheet dimensions.
 
-- `FamilySymbol` — the title block type used when creating the sheet;
-- `View` — the existing documentation view to be placed;
-- `ViewSheet` — the sheet created by the script;
-- `Viewport` — the object that places the view onto the sheet.
+The purpose of this change was to understand Revit's sheet-space coordinate system and develop the first calculated viewport placement behaviour.
 
-The commit also provides practical experience using:
+Using `ViewSheet.Outline` allows the script to determine the physical sheet dimensions dynamically.
 
-- `FilteredElementCollector`;
-- category and class filtering;
-- Revit element IDs;
-- Revit API classes and properties;
-- pyRevit transaction context managers;
-- `Viewport.Create()`;
-- `XYZ` placement coordinates.
+This means the placement calculation is based on the actual sheet extents rather than hard-coded A3 width and height values.
 
-This forms the basic API foundation from which the wider CRiT: Sheets workflow can be developed.
+Testing also demonstrated an important distinction between:
+
+- the physical centre of the sheet;
+- the centre of the usable drawing area.
+
+Because the title strip occupies approximately 40 mm at the bottom of the current A3 title block, the usable drawing region has a different vertical 
+centre from the complete sheet.
+
+The updated calculation accounts for this reserved area and positions the viewport more appropriately.
+
+This establishes the beginnings of a sheet-layout system in which CRiT can position drawings according to defined usable regions rather than arbitrary coordinates.
+
+---
 
 ---
 
 # Revit Test Results
 
-## FLIPPED (Exterior on Left)
 
-## Title Block Collection
+## Sheet Outline Retrieval
 [x]
 
 Error / Notes:
 
-The script successfully collects loaded title block types and identifies the `Title_Blocks_A3_Metric` family.
+The newly created `ViewSheet` successfully returns its paper-space bounds using:
 
-The returned title block type is a Revit `FamilySymbol`.
+`sheet.Outline`
+
+For the A3 landscape title block, the returned values were approximately:
+
+`u_min = 0.0092 ft`
+
+`u_max = 1.3871 ft`
+
+`v_min = -0.0066 ft`
+
+`v_max = 0.9678 ft`
+
+The resulting width and height correspond approximately to the expected A3 landscape dimensions of 420 × 297 mm.
 
 ---
 
-## Planning View Collection
+## Physical Sheet Centre Calculation
 [x]
 
 Error / Notes:
 
-The script successfully collects Revit `View` objects and identifies the existing view:
+The horizontal and vertical centre coordinates of the complete sheet were successfully calculated from the minimum and maximum UV coordinates.
 
-`Proposed Ground Floor - Planning`
+The viewport was successfully placed using the resulting calculated `XYZ` point.
+
+Testing confirmed that the viewport was centred relative to the complete physical sheet.
+
+However, the resulting drawing position was visually too low because the calculation included the title strip at the bottom of the sheet.
+
 
 ---
 
-## Sheet Creation
+## Title Strip Allowance
 [x]
 
 Error / Notes:
 
-A new sheet is successfully created using the A3 metric title block.
+The A3 title strip was measured at approximately 40 mm.
 
-Sheet number:
+The script now stores this as:
 
-`HIW-UPB-ZZ-00-DR-A-0999`
+`A3_title_strip_height_mm = 40`
 
-Sheet name:
-
-`CRiT Test Sheet`
+The dimension is converted to Revit internal units using `UnitUtils.ConvertToInternalUnits()` before being used in sheet-space calculations.
 
 ---
 
-## Viewport Creation
+## Usable Drawing Area Calculation
 [x]
 
 Error / Notes:
 
-The existing `Proposed Ground Floor - Planning` view is successfully placed onto the newly created sheet.
+The lower boundary of the usable drawing region is successfully calculated by adding the title-strip height to the minimum V coordinate.
 
-The view had to be removed from its previous sheet before testing because a standard Revit plan view cannot normally be placed on multiple sheets simultaneously.
+The horizontal centre remains based on the complete sheet width because the current title strip extends horizontally across the bottom of the sheet.
+
+The vertical centre is calculated between the top of the title strip and the maximum V coordinate.
 
 ---
 
 ## Viewport Position
-[ ]
+[x]
 
 Error / Notes:
 
-The viewport is currently placed using the temporary test coordinate:
+The viewport is successfully placed approximately centrally within the usable drawing area.
+
+The previous arbitrary placement point:
 
 `XYZ(1, 1, 0)`
 
-The view is therefore successfully created on the sheet but is not positioned correctly within the usable drawing area.
+has been removed.
 
-Automatic or calculated viewport positioning remains to be implemented.
+Viewport placement is now calculated from the actual sheet dimensions and the reserved title-strip area.
 
 ---
 
 
 ## Overall Result
 
-The first CRiT: Sheets prototype successfully reproduces the basic Revit workflow of:
+Viewport placement is now calculated dynamically rather than using an arbitrary hard-coded coordinate.
 
-- selecting a title block type;
-- identifying an existing view;
-- creating a new sheet;
-- assigning sheet metadata;
-- creating a viewport;
-- placing the view onto the sheet.
+The script successfully:
 
-The core object relationship has now been demonstrated successfully:
+- retrieves the physical bounds of the newly created sheet;
+- reads the minimum and maximum U/V coordinates;
+- calculates the sheet centre;
+- accounts for the 40 mm title strip;
+- defines a reduced usable drawing region;
+- calculates the centre of that usable region;
+- converts the calculated U/V position into an `XYZ` point;
+- places the viewport at the calculated position.
 
-`View → Viewport → ViewSheet`
+Testing also confirmed that `ViewSheet.Outline` dimensions change according to the physical sheet and therefore provide a basis for supporting different sheet sizes without hard-coding their overall dimensions.
 
-with the title block `FamilySymbol` used during sheet creation.
-
-The current implementation is deliberately hard-coded and intended only as a proof-of-concept.
-
-The main outstanding issue is viewport positioning, which currently uses an arbitrary `XYZ` coordinate and causes the placed view to extend beyond the usable sheet area.
-
+The current implementation still contains an A3-specific hard-coded title-strip height. This is acceptable for the current prototype but will eventually need to become part of a more general sheet-layout definition.
 
 ---
 
 ## Next Change / Hypothesis
 
-The next change should focus on viewport placement.
+The next change should begin controlling the appearance and configuration of the viewport rather than its position.
 
-Rather than using a hard-coded coordinate, the script should investigate how to determine an appropriate placement point based on the sheet and title block geometry.
+The immediate next step is to investigate viewport types and programmatically assign the required office-standard viewport type, such as:
 
-The immediate objective is to understand:
+`No Title`
 
-- the sheet coordinate system;
-- the meaning of `XYZ` coordinates in sheet space;
-- the usable drawing area of the selected title block;
-- how viewport bounds can be measured;
-- how a viewport can be positioned centrally or according to a defined office layout.
+This will introduce another important Revit object relationship:
 
-Once viewport positioning is understood, the next stages can begin to introduce:
+`Viewport → Viewport Type`
 
+Further development can then investigate:
+
+- viewport title configuration;
+- view scale;
+- view-template assignment;
+- crop configuration;
 - creation of missing views;
-- assignment of view templates;
-- drawing scale;
-- viewport type;
-- sheet size selection;
-- drawing definitions;
-- project information;
-- eventual SQLite-backed drawing standards.
+- support for different sheet sizes;
+- storing sheet-specific usable regions and title-strip dimensions as configuration data rather than hard-coded Python values.
 
-The development approach should remain incremental, with each new Revit object or behaviour tested independently before expanding the workflow.
+The longer-term objective is for CRiT to understand both the drawing definition and the sheet-layout definition required to create a consistent office-standard drawing package automatically.
 
 
 
