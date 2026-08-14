@@ -2,231 +2,212 @@
 
 ---
 
-# Commit 002
+# Commit 003
 
 ---
 
 ## Git Commit #
 
-002
+003
 
 ---
 
 ## Commit Message
 
-Centre viewport within usable sheet area
+Apply viewport type and import office view template
 
 ---
 
 ## Change Made
 
-Replaced the temporary hard-coded viewport placement coordinate with a calculated placement point based on the dimensions of the newly created sheet.
+Extended the CRiT: Sheets prototype to apply office-standard configuration to both the viewport and the planning view.
 
-The script now retrieves the sheet bounds using:
+1) Viewport Type
 
-`sheet.Outline`
+The script now automatically changes the newly created viewport to the office-standard:
 
-This returns a Revit `BoundingBoxUV` representing the physical extents of the sheet in paper space.
+No Title
 
-The minimum and maximum sheet coordinates are retrieved using:
+After creating the viewport, the script retrieves the valid viewport type IDs using:
 
-- `Min.U`
-- `Max.U`
-- `Min.V`
-- `Max.V`
+viewport.GetValidTypes()
 
-The script then calculates the centre of the sheet rather than relying on an arbitrary `XYZ` coordinate.
+The valid types are iterated and their type names retrieved using the built-in Revit type-name parameter:
 
-Initial testing showed that centring the viewport on the entire physical sheet positioned the drawing too low because the calculation 
-included the title strip at the bottom of the A3 title block.
+DB.BuiltInParameter.SYMBOL_NAME_PARAM
 
-A 40 mm title-strip height was therefore introduced:
+When the No Title viewport type is identified, its ElementId is stored and applied to the viewport using:
 
-`A3_title_strip_height_mm = 40`
+viewport.ChangeTypeId(no_title_type_id)
 
-The value is converted from millimetres to Revit's internal units using:
+An exception is raised if the required viewport type cannot be found.
 
-`DB.UnitUtils.ConvertToInternalUnits()`
+2) View Template
 
-The bottom of the usable drawing region is then calculated as:
+The script now automatically applies the office-standard planning view template:
 
-`usable_v_min = v_min + A3_title_strip_height`
+CRiT - Planning - Floor Plan
 
-The centre of the usable drawing area is calculated using:
+The active project is first searched for the required template using a FilteredElementCollector of DB.View objects.
 
-`u_centre = (u_min + u_max) / 2`
+Because Revit view templates are also DB.View objects, the script identifies the required template using:
 
-`v_centre = (usable_v_min + v_max) / 2`
+view.IsTemplate
 
-These coordinates are used to construct the `XYZ` placement point supplied to `Viewport.Create()`.
+and:
 
-The viewport is therefore now positioned automatically relative to the dimensions of the selected sheet rather than using a fixed coordinate.
+view.Name
+
+If the template already exists in the active project, the existing template is used.
+
+If the template does not exist, the script accesses the external office standards file:
+
+CRiT_Office_Standards.rvt
+
+The standards RVT is opened in the background using:
+
+app.OpenDocumentFile()
+
+The standards document is searched for the required planning view template.
+
+The template's ElementId is added to a .NET List[DB.ElementId], as required by the Revit API CopyElements() method.
+
+The view template is then copied from the standards document into the active project using:
+
+DB.ElementTransformUtils.CopyElements()
+
+with:
+
+standards_doc as the source document;
+the required template ElementId collection;
+doc as the destination document;
+DB.Transform.Identity as the transform;
+a default DB.CopyPasteOptions() object.
+
+CopyElements() returns the ElementId of the newly copied template in the active project.
+
+The copied template is retrieved from the active document using:
+
+doc.GetElement()
+
+and stored as planning_template.
+
+The external standards document is then closed without saving using:
+
+standards_doc.Close(False)
+
+Finally, the planning view is assigned the office-standard template using:
+
+planning_view.ViewTemplateId = planning_template.Id
 
 
 ---
 
 ## Reason for Change
 
-Commit 001 demonstrated that an existing Revit view could successfully be placed onto a newly created sheet, but used the temporary placement point:
+The previous CRiT: Sheets prototype successfully created and positioned a viewport but still relied on configuration already present in the active Revit project.
 
-`XYZ(1, 1, 0)`
+This change begins separating office standards from project-specific content.
 
-This caused the viewport to be positioned incorrectly because the coordinate had no relationship to the actual sheet dimensions.
+The viewport type is now controlled programmatically, ensuring that drawings created by CRiT use the required No Title presentation rather than whichever viewport type Revit assigns by default.
 
-The purpose of this change was to understand Revit's sheet-space coordinate system and develop the first calculated viewport placement behaviour.
+More significantly, the script no longer requires the planning view template to already exist in the project.
 
-Using `ViewSheet.Outline` allows the script to determine the physical sheet dimensions dynamically.
+An external Revit standards file has been introduced:
 
-This means the placement calculation is based on the actual sheet extents rather than hard-coded A3 width and height values.
+CRiT_Office_Standards.rvt
 
-Testing also demonstrated an important distinction between:
+This acts as a source of native Revit office-standard elements.
 
-- the physical centre of the sheet;
-- the centre of the usable drawing area.
+The standards file currently contains:
 
-Because the title strip occupies approximately 40 mm at the bottom of the current A3 title block, the usable drawing region has a different vertical 
-centre from the complete sheet.
+CRiT - Planning - Floor Plan
+CRiT - Construction - Floor Plan
 
-The updated calculation accounts for this reserved area and positions the viewport more appropriately.
+The script follows the workflow:
 
-This establishes the beginnings of a sheet-layout system in which CRiT can position drawings according to defined usable regions rather than arbitrary coordinates.
+Check active project → use existing template if available → otherwise retrieve from office standards → copy into project → assign to view
+
+This establishes an important architectural principle for CRiT:
+
+native Revit standards can be maintained in an external Revit standards file;
+CRiT can determine which standards are required;
+missing standards can be deployed automatically into individual projects.
+
+This avoids requiring every project to be manually configured before CRiT can create office-standard drawings.
 
 ---
 
----
 
 # Revit Test Results
 
 
-## Sheet Outline Retrieval
+## Viewport Type Assignment
 [x]
 
 Error / Notes:
 
-The newly created `ViewSheet` successfully returns its paper-space bounds using:
-
-`sheet.Outline`
-
-For the A3 landscape title block, the returned values were approximately:
-
-`u_min = 0.0092 ft`
-
-`u_max = 1.3871 ft`
-
-`v_min = -0.0066 ft`
-
-`v_max = 0.9678 ft`
-
-The resulting width and height correspond approximately to the expected A3 landscape dimensions of 420 × 297 mm.
+Newly created viewport successfully changed to the No Title viewport type.
 
 ---
 
-## Physical Sheet Centre Calculation
+## Existing View Template
 [x]
 
 Error / Notes:
 
-The horizontal and vertical centre coordinates of the complete sheet were successfully calculated from the minimum and maximum UV coordinates.
-
-The viewport was successfully placed using the resulting calculated `XYZ` point.
-
-Testing confirmed that the viewport was centred relative to the complete physical sheet.
-
-However, the resulting drawing position was visually too low because the calculation included the title strip at the bottom of the sheet.
+When CRiT - Planning - Floor Plan already exists in the active project, the existing template is identified and assigned successfully.
 
 
 ---
 
-## Title Strip Allowance
+## Missing View Template Import
 [x]
 
 Error / Notes:
 
-The A3 title strip was measured at approximately 40 mm.
+When CRiT - Planning - Floor Plan is removed from the active project, the script successfully:
 
-The script now stores this as:
-
-`A3_title_strip_height_mm = 40`
-
-The dimension is converted to Revit internal units using `UnitUtils.ConvertToInternalUnits()` before being used in sheet-space calculations.
+- opens CRiT_Office_Standards.rvt;
+- finds the required template;
+- copies it into the active project;
+- retrieves the copied template;
+- assigns it to the planning view.
 
 ---
 
-## Usable Drawing Area Calculation
+## Existing Sheet Workflow Regression
 [x]
 
 Error / Notes:
 
-The lower boundary of the usable drawing region is successfully calculated by adding the title-strip height to the minimum V coordinate.
+Sheet creation, calculated viewport placement and No Title viewport assignment continue to operate successfully after introducing the external standards workflow.
 
-The horizontal centre remains based on the complete sheet width because the current title strip extends horizontally across the bottom of the sheet.
-
-The vertical centre is calculated between the top of the title strip and the maximum V coordinate.
-
----
-
-## Viewport Position
-[x]
-
-Error / Notes:
-
-The viewport is successfully placed approximately centrally within the usable drawing area.
-
-The previous arbitrary placement point:
-
-`XYZ(1, 1, 0)`
-
-has been removed.
-
-Viewport placement is now calculated from the actual sheet dimensions and the reserved title-strip area.
 
 ---
 
 
 ## Overall Result
 
-Viewport placement is now calculated dynamically rather than using an arbitrary hard-coded coordinate.
+The required office-standard planning view template can now be automatically applied whether or not it already exists in the active project.
 
-The script successfully:
+If missing, CRiT retrieves the template from the external office standards RVT and copies it into the project before assignment.
 
-- retrieves the physical bounds of the newly created sheet;
-- reads the minimum and maximum U/V coordinates;
-- calculates the sheet centre;
-- accounts for the 40 mm title strip;
-- defines a reduced usable drawing region;
-- calculates the centre of that usable region;
-- converts the calculated U/V position into an `XYZ` point;
-- places the viewport at the calculated position.
-
-Testing also confirmed that `ViewSheet.Outline` dimensions change according to the physical sheet and therefore provide a basis for supporting different sheet sizes without hard-coding their overall dimensions.
-
-The current implementation still contains an A3-specific hard-coded title-strip height. This is acceptable for the current prototype but will eventually need to become part of a more general sheet-layout definition.
+Existing sheet creation and viewport placement functionality remains operational.
 
 ---
 
 ## Next Change / Hypothesis
 
-The next change should begin controlling the appearance and configuration of the viewport rather than its position.
+The next change should remove the current dependency on the required planning view already existing in the project.
 
-The immediate next step is to investigate viewport types and programmatically assign the required office-standard viewport type, such as:
+CRiT should check whether Proposed Ground Floor - Planning exists and, if it does not, create the required floor-plan view using the appropriate level and ViewFamilyType.
 
-`No Title`
+The newly created view can then follow the workflow established in this commit:
 
-This will introduce another important Revit object relationship:
+Create/Find View → Apply Office View Template → Create Sheet → Create Viewport
 
-`Viewport → Viewport Type`
-
-Further development can then investigate:
-
-- viewport title configuration;
-- view scale;
-- view-template assignment;
-- crop configuration;
-- creation of missing views;
-- support for different sheet sizes;
-- storing sheet-specific usable regions and title-strip dimensions as configuration data rather than hard-coded Python values.
-
-The longer-term objective is for CRiT to understand both the drawing definition and the sheet-layout definition required to create a consistent office-standard drawing package automatically.
+This will move CRiT closer to generating a drawing package from defined office standards rather than relying on manually prepared project views.
 
 
 
