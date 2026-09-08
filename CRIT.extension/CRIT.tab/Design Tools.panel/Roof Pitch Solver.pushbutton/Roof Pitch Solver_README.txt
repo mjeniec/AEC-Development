@@ -1,10 +1,12 @@
 
 
-Gen Thoughts:
+# General Thoughts / Future Development
 
-1) specify ridge height in tool (so user could draw detail line for ridge at same level as roof footprint. Or user coudl simplyu draw footprint and ridge as detail lines on same level - then tool generates new roof from info. 
-2) more complicated roofs? (multiple ridge lines..)
+1. Ridge height input
+   Allow the user to specify the ridge height directly. The roof footprint and ridge could then be drawn as Detail Lines at the same level, with the tool using the specified ridge height to generate the roof geometry.
 
+2. More complex roof forms
+   Explore how the tool could be extended to deal with more complicated roof geometry, including roofs with multiple ridge lines.
 
 
 # Roof Slope Solver
