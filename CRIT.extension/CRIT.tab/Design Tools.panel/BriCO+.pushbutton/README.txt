@@ -1,442 +1,332 @@
-# CRiT: Brick Coordinator
+# CRiT: Brick Coordinator — BriCO+
 
-**CRiT: Brick Coordinator** is a pyRevit tool that automatically adjusts Revit wall geometry to brick-coordinated dimensions while accounting for external corners, internal corners and open wall ends.
+**BriCO+** is a pyRevit tool that automatically adjusts connected Revit walls to brick-coordinated dimensions.
 
-The tool is intended to automate a repetitive piece of architectural coordination that would otherwise require the designer to manually calculate suitable brick dimensions and adjust individual walls while maintaining the overall wall layout.
+Rather than simply rounding wall lengths to a standard module, the tool analyses the geometry of the selected wall run, identifies the condition at each wall end, assigns the appropriate brick coordination rule and physically repositions the Revit walls.
 
-Rather than simply rounding every wall to a standard module, Brick Coordinator analyses the geometry of the selected wall run, determines the condition at each end of every wall and calculates the appropriate brick-coordinated length.
+The aim is to automate a repetitive piece of architectural coordination that would otherwise require the designer to calculate suitable brick dimensions and adjust individual walls manually.
+
+## Demo
+
+[▶ Watch the BriCO+ Brick Coordinator demo](Media/brick-coordinator-demo.mp4)
+
+The demonstration shows BriCO+ coordinating both a closed wall loop and an open wall run, with the Revit wall geometry automatically resized to suit the calculated brick dimensions.
+
+---
+
+## Current Capabilities
 
 The current prototype supports:
 
-* Open wall runs
-* Closed wall loops
-* External corners
-* Internal corners
-* Open wall ends
-* Clockwise and anti-clockwise layouts
-* Flipped and non-flipped Revit walls
-* Automatic physical repositioning of the selected Revit walls
+- Open wall runs
+- Closed wall loops
+- External corners
+- Internal corners
+- Open wall ends
+- Clockwise and anti-clockwise layouts
+- Flipped and non-flipped Revit walls
+- Automatic physical repositioning of selected Revit walls
+- Native Revit wall output
 
 ---
 
-# Core Concept: Brick Coordination
+## How It Works
+
+At a high level, the current workflow is:
+
+1. Select a connected wall run
+2. Extract the physical wall boundary geometry
+3. Detect whether the layout is open or closed
+4. Identify and confirm the exterior wall face
+5. Match the exterior geometry back to the original Revit walls
+6. Analyse internal, external and open-end conditions
+7. Assign the appropriate brick coordination rule
+8. Calculate the nearest coordinated wall dimensions
+9. Recalculate the corresponding wall centrelines
+10.Update the physical Revit walls
+
+The overall process can be summarised as:
+
+Model geometry → understand wall condition → apply brick coordination rule → update Revit geometry
+
+---
+
+## Brick Coordination Logic
 
 Brickwork dimensions depend not only on the nominal brick module but also on the condition occurring at each end of a wall.
 
-Brick Coordinator therefore assigns each wall one of three coordination conditions:
+BriCO+ therefore classifies each wall using one of three coordination conditions:
 
-* **Co**
-* **Co+**
-* **Co-**
+- Co
+- Co+
+- Co-
 
-These represent different relationships between the wall dimension and the brick coordination grid.
+The current prototype uses a 112.5 mm half-brick module, with the appropriate adjustment applied according to the corner conditions at each end of the wall.
 
-The current tool uses a **112.5 mm half-brick module** and applies a ±10 mm adjustment where required by the wall's corner condition.
-
-The general principle is:
-
-**Analyse wall geometry → identify corner conditions → assign brick condition → calculate coordinated length → reposition Revit walls**
-
-This means brick coordination is derived from the geometry of the wall layout rather than requiring the user to calculate each wall manually.
+This allows the required brick dimension to be derived automatically from the wall geometry rather than selected manually by the user.
 
 ---
 
-# 1. Select Walls
+# Technical Development
 
-The user selects the Revit walls to be coordinated before running the tool.
+The following sections document the current geometry-processing and Revit API approach used to develop the prototype.
 
-Brick Coordinator retrieves the selected Wall elements and uses their physical Revit geometry as the starting point for the analysis.
+## 1. Extract Wall Geometry
 
-The current prototype is intended to operate on a connected wall run rather than arbitrary unrelated walls.
-
----
-
-# 2. Extract Wall Geometry
-
-Brick Coordinator extracts the solid geometry of the selected walls and performs Boolean union operations to combine them into a single representation of the wall layout.
+BriCO+ retrieves the solid geometry of the selected Revit walls and performs Boolean union operations to create a combined representation of the wall layout.
 
 The bottom face of the resulting solid is then used to extract the wall boundary geometry.
 
-This allows the tool to work from the actual physical faces of the walls rather than relying solely on their Revit LocationCurves.
-
-The resulting geometry represents the two sides of the selected wall run.
+This allows the tool to work from the actual physical faces of the walls rather than relying solely on their Revit `LocationCurves`.
 
 ---
 
-# 3. Detect Open or Closed Layout
+## 2. Detect Open or Closed Layout
 
-Brick Coordinator automatically determines whether the selected walls form:
+The tool automatically determines whether the selected walls form:
 
-* an **open wall run**, or
-* a **closed wall loop**.
+- an 'open wall run', or
+- a 'closed wall loop'.
 
-For a closed layout, the fused wall geometry produces two perimeter loops representing the two sides of the wall.
+For a closed layout, the fused geometry produces two perimeter loops representing the two sides of the wall.
 
-For an open run, the boundary also contains the wall end caps. The tool identifies these using the wall thickness and separates the remaining geometry into the two continuous wall-face tracks.
-
-The result in either case is two candidate tracks representing opposite sides of the selected walls.
+For an open run, the boundary also contains wall end caps. These are identified and removed so that the two continuous wall-face tracks can be isolated.
 
 ---
 
-# 4. Confirm Exterior Face
+## 3. Confirm the Exterior Face
 
 Brick coordination depends on knowing which physical wall face represents the exterior.
 
-Rather than relying on Revit wall flip state or wall drawing direction, Brick Coordinator asks the user to confirm the exterior geometrically.
+Rather than relying on Revit wall flip state or original drawing direction, BriCO+ identifies two candidate wall-face tracks geometrically.
 
-One candidate track is temporarily highlighted in **pink** within the active Revit view.
+One candidate track is temporarily highlighted in the active Revit view and the user confirms whether it represents the exterior.
 
-The user is asked:
+From that point onwards, the coordination algorithm operates on the confirmed exterior wall face.
 
-> Is the pink highlighted track the exterior side?
-
-The user can either:
-
-* accept the highlighted track; or
-* select the opposite track.
-
-The temporary geometry is then removed.
-
-From this point onwards, the algorithm operates on the confirmed exterior wall face.
-
-This allows the main coordination algorithm to work consistently regardless of whether the original Revit walls are flipped or non-flipped.
+This allows the same processing logic to work regardless of whether individual Revit walls are flipped or non-flipped.
 
 ---
 
-# 5. Match and Sort Wall Edges
+## 4. Match and Sort Wall Edges
 
-Each curve in the selected exterior track is matched back to its corresponding original Revit Wall element.
+Each edge in the confirmed exterior track is matched back to its corresponding original Revit Wall element.
 
-The tool does this by comparing the exterior edge geometry with the LocationCurves of the selected Revit walls and identifying the closest matching wall.
+The exterior edges are then sorted into a continuous sequence and, where necessary, reversed so that the complete track follows one consistent direction.
 
-The wall reference is then stored together with the edge geometry and carried through the remainder of the algorithm.
-
-The selected exterior edges are also sorted into a continuous sequence.
-
-Where necessary, individual edge directions are reversed so that the complete exterior track follows one consistent direction.
-
-This produces an ordered representation of the wall layout in which each edge retains a reference to the Revit Wall that it represents.
+Each edge therefore retains a reference to the Revit wall that it represents throughout the calculation process.
 
 ---
 
-# 6. Analyse Corner Geometry
+## 5. Analyse Corner Geometry
 
-Brick Coordinator analyses the relationship between consecutive exterior edges using vector geometry.
+The relationship between consecutive wall edges is analysed using vector geometry.
 
-For each junction, a signed 2D cross product is calculated to determine whether the exterior track turns left or right.
+A signed 2D cross product is used to determine whether the exterior track turns left or right.
 
-Because the sorted exterior track is oriented so that the outside lies consistently on its left:
+With the exterior consistently positioned on one side of the ordered track:
 
-* a **right turn** represents an external corner;
-* a **left turn** represents an internal corner.
-
-Open wall ends are handled separately because no adjacent wall exists at those locations.
+- one turn direction represents an 'external corner'
+- the opposite direction represents an 'internal corner'
+- open wall ends are handled separately
 
 Each wall can therefore be classified according to the condition occurring at its start and end.
 
 ---
 
-# 7. Assign Brick Condition
+## 6. Assign Brick Condition
 
-The start and end conditions are used to assign the appropriate brick coordination condition to each wall.
+The start and end conditions are used to assign the appropriate:
 
-The current system uses:
+- Co
+- Co+
+- Co-
 
-* **Co-** where the geometry requires the reduced coordination condition
-* **Co** for the standard coordination condition
-* **Co+** where the geometry requires the increased coordination condition
+brick coordination condition.
 
-The exact condition depends on the combination of external corners, internal corners and open ends occurring at the two ends of the wall.
-
-This allows the coordination rule to be derived automatically from the wall geometry rather than selected manually by the user.
+The required rule is therefore derived automatically from the physical wall geometry.
 
 ---
 
-# 8. Calculate Brick-Coordinated Lengths
+## 7. Calculate Coordinated Dimensions
 
-Once the condition has been assigned, Brick Coordinator calculates the nearest suitable brick-coordinated dimension.
+Once the appropriate condition has been assigned, BriCO+ calculates the nearest suitable brick-coordinated dimension.
 
-The current prototype uses a **112.5 mm half-brick module**.
+Walls are processed sequentially.
 
-The resizing calculation accounts for the assigned:
-
-* Co
-* Co+
-* Co-
-
-condition before rounding the wall to the nearest module.
-
-The walls are processed sequentially.
-
-The first resized edge retains its original start point. Each subsequent edge begins from the newly calculated endpoint of the preceding edge.
+The first resized edge retains its original start position, while each subsequent edge begins from the newly calculated endpoint of the preceding wall.
 
 This allows dimensional changes to propagate through the connected wall run while maintaining continuity between walls.
 
-The current resizing engine assumes horizontal or vertical wall edges.
-
 ---
 
-# 9. Calculate New Wall Centrelines
+## 8. Recalculate Wall Centrelines
 
-The brick coordination calculations operate on the selected **exterior wall face**, but Revit walls are ultimately repositioned using their LocationCurves.
+The brick calculations operate on the selected exterior wall face, but Revit walls are repositioned through their `LocationCurves`.
 
-Brick Coordinator therefore converts each resized exterior edge back into the appropriate wall centreline.
+BriCO+ therefore converts each resized exterior edge back into the appropriate wall centreline.
 
 For each wall, the tool:
 
-* converts the resized edge coordinates into Revit internal units;
-* calculates the direction of the resized exterior edge;
-* calculates a perpendicular vector;
-* creates test points on either side of the exterior edge at half the wall thickness;
-* compares these test points with the wall's existing LocationCurve;
-* determines which side of the exterior edge contains the wall centreline;
-* offsets the resized edge by half the wall thickness in the correct direction;
-* creates a new Revit Line representing the target centreline.
+- calculates the direction of the resized exterior edge
+- calculates a perpendicular vector
+- tests both possible centreline positions
+- compares these against the existing wall location
+- identifies the correct side of the exterior face
+- offsets the resized edge by half the wall thickness
+- creates the target Revit wall centreline
 
-This approach avoids needing to infer centreline direction from Revit wall flip state.
-
----
-
-# 10. Update the Revit Model
-
-Once the target centrelines have been calculated, Brick Coordinator physically updates the selected Revit walls.
-
-Wall joins are temporarily disabled while the geometry is being changed to reduce interference from Revit's automatic wall-join behaviour.
-
-For each wall, the tool then:
-
-* sets the wall Location Line reference to Wall Centreline;
-* normalises flipped walls where required;
-* assigns the newly calculated LocationCurve.
-
-Wall joins are subsequently re-enabled.
-
-The complete operation is performed within a Revit transaction so that failed model modifications can be rolled back.
-
-The result is a physically adjusted Revit wall layout coordinated to the calculated brick dimensions.
+This avoids requiring separate centreline calculations for flipped and non-flipped walls.
 
 ---
 
-# Current Algorithm
+## 9. Update the Revit Model
 
-At a high level, the current Brick Coordinator workflow is:
+Once the target centrelines have been calculated, the selected Revit walls are physically updated.
 
-**Select walls**
+Wall joins are temporarily disabled while the geometry is modified to reduce interference from Revit's automatic wall-join behaviour.
 
-↓
+The tool then:
 
-**Fuse wall geometry**
+- sets the wall Location Line reference to Wall Centreline
+- normalises flipped walls where required
+- assigns the calculated `LocationCurve`
+- re-enables wall joins
 
-↓
-
-**Extract wall boundaries**
-
-↓
-
-**Detect open / closed layout**
-
-↓
-
-**Separate the two wall-face tracks**
-
-↓
-
-**User confirms exterior face**
-
-↓
-
-**Match exterior edges to Revit walls**
-
-↓
-
-**Sort exterior track**
-
-↓
-
-**Analyse internal / external corners**
-
-↓
-
-**Assign Co / Co+ / Co- conditions**
-
-↓
-
-**Calculate coordinated wall lengths**
-
-↓
-
-**Recalculate wall centrelines**
-
-↓
-
-**Update physical Revit walls**
+The complete operation takes place within a Revit transaction so that failed modifications can be rolled back.
 
 ---
 
-# Handling Revit Wall Flip State
+## Handling Revit Wall Flip State
 
 An important development goal has been to remove wall flip state from the main brick-coordination algorithm.
 
-Earlier versions required separate logic for flipped and non-flipped walls.
+Earlier versions required separate processing for flipped and non-flipped walls.
 
-The current architecture instead establishes the exterior wall face geometrically and carries the corresponding Revit Wall reference through the processing pipeline.
+The current approach instead establishes the exterior face geometrically and carries the corresponding Revit wall reference through the processing pipeline.
 
-As a result, the geometry, corner-classification and resizing stages do not need separate flipped/non-flipped algorithms.
+As a result, the main geometry, corner-classification and resizing stages can operate on:
 
-Wall flip state is only considered when the final calculated geometry is applied back to the Revit model.
+- flipped walls
+- non-flipped walls
+- clockwise layouts
+- anti-clockwise layouts
 
-This significantly reduces duplicated logic and allows the same processing engine to operate on:
-
-* flipped walls;
-* non-flipped walls;
-* clockwise layouts;
-* anti-clockwise layouts.
+without requiring separate coordination algorithms.
 
 ---
 
-# Current Regression Testing
+## Regression Testing
 
 The current prototype is tested against six standard geometry cases.
 
-## Flipped Walls
+### Flipped Walls
 
-* Closed Loop — Clockwise
-* Closed Loop — Anti-clockwise
-* Open Loop
+- Closed Loop — Clockwise
+- Closed Loop — Anti-clockwise
+- Open Run
 
-## Non-Flipped Walls
+### Non-Flipped Walls
 
-* Closed Loop — Clockwise
-* Closed Loop — Anti-clockwise
-* Open Loop
+- Closed Loop — Clockwise
+- Closed Loop — Anti-clockwise
+- Open Run
 
-Following the first full architectural refactor, all six regression tests produce successful wall repositioning.
+Following the first architectural refactor, all six regression cases produce successful wall repositioning.
 
-These tests are used after each significant refactor to verify that changes to the code structure have not altered the existing geometric behaviour.
-
----
-
-# Current Development Status
-
-The first architectural refactoring pass of Brick Coordinator is now complete.
-
-The original procedural script has progressively been reorganised into helper functions representing clearer individual responsibilities, including:
-
-* wall boundary extraction;
-* open/closed layout detection and track separation;
-* exterior-track confirmation;
-* wall/edge matching;
-* track sorting;
-* vector corner analysis;
-* brick-condition assignment;
-* brick-dimension resizing;
-* target centreline calculation;
-* Revit wall modification.
-
-The main focus of this first refactor has been **behaviour preservation**.
-
-Changes have therefore concentrated on:
-
-* removing duplicated algorithms;
-* separating responsibilities;
-* improving function interfaces;
-* making the main workflow easier to understand;
-* reducing dependence on flipped/non-flipped branching;
-* maintaining identical Revit output throughout the refactor.
+These tests are repeated after significant changes to help verify that refactoring has not altered the existing geometric behaviour.
 
 ---
 
-# Current Limitations / Areas for Review
+## Development Status
 
-The current version is a working prototype and still contains several assumptions and areas requiring further development.
+The first architectural refactoring pass of BriCO+ is complete.
+
+The original procedural script has progressively been reorganised into helper functions with clearer individual responsibilities, including:
+
+- wall boundary extraction
+- open/closed layout detection
+- track separation
+- exterior-face confirmation
+- wall/edge matching
+- track sorting
+- vector corner analysis
+- brick-condition assignment
+- brick-dimension resizing
+- target centreline calculation
+- Revit wall modification
+
+The main focus of the first refactor has been **behaviour preservation** while improving the structure and readability of the code.
+
+---
+
+## Current Limitations
+
+The current version is a working prototype and still contains several assumptions and areas for further development.
 
 These include:
 
-* The resizing engine currently distinguishes horizontal and vertical wall edges rather than resizing arbitrary angled walls.
-* Wall thickness is initially derived from the first selected wall; layouts containing different wall thicknesses require further investigation.
-* Open-run end-cap detection currently uses wall thickness and a tolerance.
-* The sorting engine currently contains fallback behaviour for unsorted segments that should potentially become an explicit error.
-* Active-view compatibility should be checked before creating temporary Detail Curves.
-* Error handling should be separated more clearly from geometric calculation.
-* Location Line parameter error handling requires review.
-* Closed loops with irregular geometry require further testing, particularly where accumulated resizing affects the final junction.
+- The resizing engine currently assumes horizontal or vertical wall edges
+- Layouts containing different wall thicknesses require further investigation
+- Open-run end-cap detection currently relies on wall thickness and a tolerance
+- More irregular closed loops require additional testing
+- Validation and error handling require further development
+- Some remaining diagnostic/debug code should be removed
+- The current interface is primarily a development interface rather than a finished user-facing tool
 
-These are deliberately being retained as identifiable development tasks rather than adding complexity before the core architecture is stable.
-
----
-
-# Next Development Stage
-
-With the first architectural refactor complete, the next development pass should focus on tightening the existing implementation.
-
-Potential work includes:
-
-* reviewing helper-function interfaces;
-* resolving outstanding TODOs;
-* improving validation and error handling;
-* reducing remaining diagnostic/debug code;
-* consolidating repeated unit conversions;
-* improving naming consistency;
-* testing more complex and irregular wall layouts;
-* investigating arbitrary angled walls;
-* organising related helper functions into separate Python modules.
-
-Once the internal architecture is sufficiently stable, the tool can move from a development script toward a more structured pyRevit application.
+These limitations are being retained as identifiable development tasks rather than adding additional complexity before the core architecture is stable.
 
 ---
 
-# Possible Future Development
+## Possible Future Development
 
-The current tool coordinates the overall wall geometry.
-
-A more complete Brick Coordinator could eventually extend this concept to other elements of masonry design and coordination.
+A more complete version of BriCO+ could extend the same coordination approach to other aspects of masonry design.
 
 Potential future features include:
 
-* Door opening coordination
-* Window opening coordination
-* Automatic adjustment of opening positions to brick modules
-* Automatic adjustment of opening widths
-* Pier-width coordination
-* Brick coursing in the vertical direction
-* Coordination of sill, lintel and parapet levels
-* Different brick sizes and masonry systems
-* User-selectable bond / coordination rules
-* Visual preview before committing wall changes
-* Reporting walls or openings that cannot be coordinated within an acceptable tolerance
-* User controls defining which walls or dimensions are allowed to move
-* More comprehensive WPF user interface
-* Automatic validation after coordination
-* Integration with wider CRiT design checking
+- Door opening coordination
+- Window opening coordination
+- Automatic adjustment of opening positions to brick modules
+- Automatic adjustment of opening widths
+- Pier-width coordination
+- Vertical brick coursing
+- Coordination of sill, lintel and parapet levels
+- Different brick sizes and masonry systems
+- User-selectable coordination rules
+- Visual preview before committing wall changes
+- Reporting geometry that cannot be coordinated within an acceptable tolerance
+- User controls defining which dimensions are fixed or allowed to move
+- More comprehensive WPF user interface
+- Automatic validation after coordination
 
 A future version could potentially distinguish between dimensions that are:
 
-* **fixed** — must not move;
-* **preferred** — should be retained where possible;
-* **flexible** — may move to achieve brick coordination.
+- **Fixed** — must not move
+- **Preferred** — should be retained where possible
+- **Flexible** — may move to achieve brick coordination
 
-This would allow the tool to develop from a simple wall-resizing algorithm into a more general masonry coordination system.
+This could allow the tool to develop from a wall-resizing prototype into a more general masonry coordination system.
 
 ---
 
 # Wider CRiT Concept
 
-Brick Coordinator represents one example of the wider **CRiT** concept: embedding architectural and construction knowledge directly into the design environment.
+Brick Coordinator is one example of the wider **CRiT** concept: embedding architectural and construction knowledge directly into the design environment.
 
-Rather than simply automating repetitive Revit operations, the tool encodes a specific piece of architectural knowledge — brick dimensional coordination — and applies it directly to live model geometry.
+Rather than simply automating repetitive Revit operations, BriCO+ attempts to encode a specific piece of architectural knowledge — brick dimensional coordination — and apply that knowledge directly to live model geometry.
 
 The longer-term principle is:
 
 **Model geometry → understand design condition → apply construction rule → provide or implement coordinated solution**
 
-This same approach could later be applied across other areas of CRiT, including:
+The same approach could potentially be applied to other areas of architectural design and coordination, including:
 
-* buildability;
-* CDM / design risk;
-* Building Regulations;
-* embodied carbon;
-* drawing production;
-* design validation;
-* construction coordination.
+- Buildability
+- CDM / design risk
+- Building Regulations
+- Embodied carbon
+- Drawing production
+- Design validation
+- Construction coordination
 
-Brick Coordinator therefore acts both as a practical Revit automation tool and as a development exercise in translating architectural knowledge into structured, testable software.
+BriCO+ therefore acts both as a practical Revit automation tool and as a development exercise in translating architectural knowledge into structured, testable software.
