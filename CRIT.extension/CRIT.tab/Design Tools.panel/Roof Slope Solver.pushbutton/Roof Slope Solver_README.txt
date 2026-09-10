@@ -1,120 +1,84 @@
-
-
-# General Thoughts / Future Development
-
-1. Ridge height input
-   Allow the user to specify the ridge height directly. The roof footprint and ridge could then be drawn as Detail Lines at the same level, with the tool using the specified ridge height to generate the roof geometry.
-
-2. More complex roof forms
-   Explore how the tool could be extended to deal with more complicated roof geometry, including roofs with multiple ridge lines.
-
-
 # Roof Slope Solver
 
-A Revit automation tool that generates or updates a roof from a defined roof footprint and ridge line.
+A Revit/Dynamo form-finding tool for rapidly testing roof geometry from a defined roof footprint and ridge line.
 
-## Initial Scope
+The tool generates a native Revit roof and calculates the required slope of each roof plane from the position and elevation of the input geometry.
 
-The first version will support:
+## Demo
+
+[▶ Watch the Roof Slope Solver demo](Media/roof-slope-solver-demo.mp4)
+
+The demonstration shows how the roof can be regenerated after changing the ridge position or elevation, allowing alternative roof forms to be tested quickly during design development.
+
+## Current Workflow
+
+### 1. Define the roof footprint
+
+The roof footprint is drawn using Revit Model Lines with the **Roof Footprint** line style and placed at the required **Eaves Level**.
+
+### 2. Define the ridge
+
+The ridge is drawn using a Model Line with the **Ridge** line style and placed at the required **Ridge Level**.
+
+### 3. Extract and classify geometry
+
+The Dynamo graph identifies and separates the footprint and ridge geometry, extracting the coordinates required to construct each roof plane.
+
+### 4. Generate roof surfaces
+
+The relationship between the footprint edges and ridge is used to calculate the geometry and slope of each roof plane.
+
+### 5. Create the Revit roof
+
+A native Revit roof is generated from the footprint and the calculated slopes are assigned to the corresponding roof edges.
+
+## Form Finding
+
+Because the roof is generated from control geometry, the inputs can be modified and the roof regenerated.
+
+For example:
+
+- Move the ridge to quickly test alternative roof forms
+- Change the ridge elevation to test different pitches and proportions
+- Modify the footprint to explore alternative roof configurations
+
+## Current Scope
+
+The current version supports:
 
 - A single rectangular roof footprint
 - A single straight ridge line
-- Dual-pitch or hipped roof forms
+- Dual-pitch and hipped roof forms
 - Asymmetrical roof pitches
 - Native Revit roof output
 
-## Workflow
+## Future Development
 
-### 1. Input
+### Simplified Ridge Height Input
 
-- Existing Revit roof object
-- Ridge line, initially represented by a Revit detail line
+Allow the ridge height to be specified directly through the tool.
 
-### 2. Extract Geometry
+This would allow both the footprint and ridge to be drawn on the same level, with the tool applying the required vertical offset automatically.
 
-Extract:
+### More Complex Roof Forms
 
-- The roof footprint curves from the roof sketch
-- The footprint curve start and end coordinates
-- The ridge start and end coordinates
-
-### 3. Match Source Geometry
-
-Retain the relationship between each extracted footprint curve and its corresponding original Revit roof edge.
-
-This reference will later allow the calculated slope to be applied to the correct roof edge.
-
-### 4. Classify and Package
-
-Group the geometry into a list of dictionaries.
-
-Each dictionary may contain:
-
-```python
-{
-    "original_edge": ...,
-    "face_coordinates": ...,
-    "slope_angle": ...
-}
-
-Each dictionary represents one roof plane and preserves the relationship between:
-
-- Original Revit footprint edge
-- Calculated roof-plane geometry
-- Calculated slope
-
-
-### 5. Generate or Calculate
-
-For each roof plane, either:
-
-- Generate temporary face geometry and extract its angle, or
-- Calculate the slope directly from the coordinates
-
-Store the resulting slope angle in the corresponding dictionary.
-
-### 6. Update or Create
-
-Use the stored slope values to either:
-
-- Update the correct edges of an existing Revit roof, or
-- Create a new native Revit roof from the footprint and calculated slopes
-
-Future Development:
-
-User-Defined Ridge Height
-
-Allow the user to define the ridge height within the tool.
-
-This would allow the footprint and ridge to be drawn as detail lines on the same level, with the tool using the specified ridge height to calculate the roof slopes.
-
-Detail-Line Input:
-
-Allow the user to generate a new roof using only:
-
-- Footprint detail lines
-- Ridge detail line
-- Ridge height
-
-More Complex Roofs:
-
-Investigate support for:
+Explore support for:
 
 - Multiple ridge lines
 - L-shaped footprints
 - Valleys
 - Intersecting roof forms
 
-STRUCTURE NOTES:
+## Structure
 
-Selected Model Lines
-        ↓
-1. Extract and classify input lines
-        ↓
-2. Build edge and ridge records
-        ↓
-3. Build roof-surface records
-        ↓
-4. Calculate slope for each surface
-        ↓
-5. Create roof and assign slopes
+    Selected Model Lines
+            ↓
+    1. Extract and classify input lines
+            ↓
+    2. Build edge and ridge records
+            ↓
+    3. Build roof-surface records
+            ↓
+    4. Calculate slope for each surface
+            ↓
+    5. Create roof and assign slopes
