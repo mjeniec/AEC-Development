@@ -2,137 +2,231 @@
 
 ---
 
-# Commit 001
+# Commit 002
 
 ---
 
 ## Git Commit #
 
-001
+002
 
 ---
 
 ## Commit Message
 
-Calculate room glazing ratios from Revit model data
+Extract glazing orientation and identify most glazed façade
 
 ---
 
 ## Change Made
 
-Created the first working prototype of the CRiT: Glazing Ratio Checker.
+Extended the CRiT: Glazing Ratio Checker to determine the orientation of windows and curtain wall glazing.
 
 The tool now:
 
-- Collects all Rooms in the active Revit model
-- Extracts Room Number, Name and Floor Area
-- Collects standard Window elements
-- Calculates window area from Width × Height
-- Associates windows with the rooms they serve
-- Collects Curtain Wall Panels and includes their area
-- Combines all identified glazing into a total glazing area for each room
-- Calculates:
+- Determines the exterior-facing direction of each window and curtain wall panel
+- Classifies glazing as North, East, South or West
+- Stores glazing area by orientation for each room
+- Calculates total glazing area by orientation for the building
+- Identifies the façade with the greatest total glazing area
+- Identifies the room with the greatest total glazing area
 
-    Glazing Ratio = (Glazing Area / Room Area) × 100
+A helper function now determines the exterior-facing vector of each glazed element by:
 
-The results are stored by room and output as a text report containing:
+- Finding the centre of the element
+- Creating test points on either side of the glazing
+- Checking which point lies within a Revit Room
+- Returning the vector pointing towards the exterior
 
-    Room Number
-    Room Name
-    Room Area
-    Glazing Area
-    Glazing Ratio
+A second helper function classifies the resulting vector according to its dominant X or Y direction:
+
+    +Y = North
+    +X = East
+    -Y = South
+    -X = West
+
+Room data now includes:
+
+    glazing_by_orientation:
+        North
+        East
+        South
+        West
+
+Whole-building glazing totals are stored separately in:
+
+    total_glazing_area_by_orientation
+
+The script also identifies:
+
+    Most Glazed Elevation
+    Largest Glazed Elevation Area
+    Most Glazed Room
+    Glazing Area of Most Glazed Room
 
 ---
 
 ## Reason for Change
 
-This establishes the basic data-processing workflow required for a room-based glazing checker.
+Approved Document O uses the orientation of the façade with the greatest glazing area when selecting the appropriate simplified-method glazing limits.
 
-The aim is to use information already contained within the Revit model to automatically assess the relationship between glazing and room floor area.
+The previous version calculated glazing-to-floor-area ratios but did not understand the direction in which the glazing faced.
 
-The current version provides the underlying calculation only.
+This change introduces the geometric information required for a future Part O check.
 
-Future development can combine this with additional information such as:
+The tool can now establish:
 
-- Glazing orientation
-- Cross-ventilation
-- Geographic overheating risk
-- Openable area
-- External shading and overhangs
+    Glazing Area
+        +
+    Room Association
+        +
+    Glazing Orientation
+        ↓
+    Glazing by Façade
+        ↓
+    Most Glazed Façade
 
-This would allow the tool to develop into an early-stage overheating and environmental design checker, including checks based on Approved Document O.
+It also identifies the most glazed room, which will be required for the separate Part O room-level glazing check.
 
 ---
 
 # Revit Test Results
 
-## Room Data
+## Standard Window Orientation
 
 [x]
 
-All rooms in the House In Wood model are collected successfully.
+Standard windows successfully return an exterior-facing direction.
 
-Room Number, Name and Floor Area are returned correctly.
+The calculated orientations were checked against the House In Wood model and correspond with the expected building elevations.
 
 ---
 
-## Standard Windows
+## Curtain Wall Panel Orientation
 
 [x]
 
-Standard windows are successfully collected and associated with the rooms they serve.
+Curtain Wall Panels successfully use the same orientation workflow as standard windows.
 
-Multiple windows within the same room are correctly added together.
+Panel areas are added both to:
+
+- The appropriate room orientation total
+- The appropriate whole-building orientation total
 
 ---
 
-## Curtain Wall Glazing
+## Room Glazing by Orientation
 
 [x]
 
-Curtain Wall Panels are successfully collected and their areas can be added to the room glazing total.
+Each room now reports its glazing area separately by North, East, South and West orientation.
+
+Example:
+
+    KITCHEN / DINING
+
+    North: 8.81 sqm
+    East: 0.00 sqm
+    South: 6.44 sqm
+    West: 11.14 sqm
 
 ---
 
-## Glazing Ratio
+## Whole-Building Glazing by Orientation
 
 [x]
 
-The tool successfully calculates the total glazing area as a percentage of each room's floor area.
+The script successfully totals glazing across the complete model by orientation.
 
 Example output:
 
-    10 - BEDROOM 02
-    Room Area: 15.41 sqm
-    Glazing Area: 3.26 sqm
-    Glazing Ratio: 21.16%
+    North: 20.22 sqm
+    East: 9.40 sqm
+    South: 32.16 sqm
+    West: 11.14 sqm
+
+---
+
+## Most Glazed Elevation
+
+[x]
+
+The script successfully identifies the elevation containing the greatest total area of glazing.
+
+For the current House In Wood test model:
+
+    Most Glazed Elevation: South
+
+---
+
+## Most Glazed Room
+
+[x]
+
+The script successfully compares room glazing totals and identifies the room containing the greatest actual area of glazing.
+
+For the current test model:
+
+    Most Glazed Room: Kitchen / Dining
 
 ---
 
 ## Overall Result
 
-The core room-based glazing calculation is operational.
+The tool can now determine both the quantity and orientation of glazing serving individual rooms and the dwelling as a whole.
 
-The tool can now combine room data, standard windows and curtain wall glazing to produce a glazing-to-floor-area ratio for each room.
+The current workflow is:
+
+    Rooms
+        ↓
+    Room Floor Areas
+        ↓
+    Windows + Curtain Wall Panels
+        ↓
+    Glazing Area
+        ↓
+    Room Association
+        ↓
+    Exterior-Facing Vector
+        ↓
+    North / East / South / West
+        ↓
+    Room Glazing by Orientation
+        +
+    Building Glazing by Orientation
+        ↓
+    Most Glazed Façade
+        +
+    Most Glazed Room
+
+This provides the main geometric information required to begin implementing the Approved Document O simplified glazing check.
 
 ---
 
 ## Current Limitations
 
-- Standard window area currently uses overall Width × Height rather than actual transparent glass area.
+- Orientation is currently based on Revit Project North rather than True North.
+- The exterior-side test currently uses a fixed 0.5 m offset from the glazing element.
+- Standard window area still uses overall Width × Height rather than transparent glass area.
 - Opaque curtain wall panels are not yet excluded automatically.
-- The calculated ratio is not yet compared against regulatory or design criteria.
-- More complex room, phase and glazing configurations require further testing.
+- Whole-dwelling floor area has not yet been calculated.
+- The tool does not yet apply Approved Document O limits.
+- Cross-ventilation and overheating-risk classification are not yet included.
 
 ---
 
 ## Next Change / Hypothesis
 
-Add glazing orientation.
+Implement the Approved Document O simplified glazing-area check.
 
-The tool should determine the facing direction of each window and curtain wall panel and classify glazing by orientation.
+The next version should introduce:
 
-This can then be combined with glazing ratio data to begin implementing Approved Document O overheating checks.
+- Cross-ventilated / non-cross-ventilated selection
+- Moderate-risk / high-risk location selection
+- Approved Document O glazing-limit tables
+- Whole-dwelling glazing ratio
+- Most-glazed-room glazing ratio
+- Automatic selection of the relevant Part O limits based on the most glazed façade
+- Advisory compliance results for the whole-dwelling and most-glazed-room checks
 
-Later development should also investigate automatic detection of external shading and roof overhang geometry.
+Before the Part O assessment is treated as reliable, glazing orientation should also be corrected from Project North to True North.
