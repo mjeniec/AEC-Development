@@ -1,0 +1,11 @@
+# Personal photographs
+test_photos/
+
+# AI models
+models/
+
+# Generated images
+output_folder/
+
+# Python temporary files
+__pycache__/
