@@ -6,3 +6,10 @@ index/
 
 # Downloaded Building Regulations PDFs
 Approved Documents/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
