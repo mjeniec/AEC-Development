@@ -1,0 +1,8 @@
+# Learning experiments
+pdf_experiments.py
+
+# Saved embeddings and index data
+index/
+
+# Downloaded Building Regulations PDFs
+Approved Documents/
