@@ -1,0 +1,18 @@
+# Personal photographs
+test_photos/
+
+# AI models
+models/
+
+# Generated images
+output_folder/
+
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Local database containing personal information
+known_people*
+
+# Local virtual environment
+.venv/
